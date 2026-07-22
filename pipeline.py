@@ -36,7 +36,7 @@ def check_pass_len(data):
     pw=data['password']
     if len(pw) >=8 and any(c.isdigit() for c in pw):
         return(True,None)
-    return(False,"username must be at least 8 charaters and include a number")
+    return(False,"password must be at least 8 charaters and include a number")
 def check_email(data):
     pw=data['email']
     if "@" in pw and "." in pw:
@@ -54,7 +54,7 @@ def name_not_taken(data):
     pw=data['username']
     if  pw not in database_user:
         return(True,None)
-    return(False,"email already taken")
+    return(False,"username already taken")
 def create_account(data):
     return {**data, "status": "account created"}
 def main():
