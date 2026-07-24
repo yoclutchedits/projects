@@ -1,8 +1,6 @@
 import smtplib
 from email.mime.text import MIMEText
 import random
-from keys import gogle as GMAIL_APP_PASSWORD
-from keys import hf_key, g_key
 from typing import Callable, List, Tuple, Any, Optional
 from dataclasses import dataclass, field
 import json
@@ -15,6 +13,13 @@ import os
 import streamlit as st
 import time
 from streamlit_autorefresh import st_autorefresh
+GMAIL_APP_PASSWORD = st.secrets.get("gogle")
+
+hf_key = st.secrets.get("hf_key")
+
+g_key = st.secrets.get("g_key")
+
+hf_token = st.secrets.get("hf_key")
 DB_PATH = os.path.join(os.path.dirname(__file__), "users.json")
 GMAIL_ADDRESS = "x.prashanna.x@gmail.com"
 FIELD_MAP = {
