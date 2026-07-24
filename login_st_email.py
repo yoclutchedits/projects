@@ -592,7 +592,6 @@ def main():
         if st.sidebar.button("Log Out"):
             st.session_state.authenticated = False
             st.rerun()
-        st.sidebar.title("AI Settings")
         ai_engine = st.sidebar.radio("Select AI Engine:", ["Groq", "Hugging Face"], index=0, key="ai_engine")
         generate_response = groq if ai_engine == "Groq" else hf
         st.sidebar.write("---")
