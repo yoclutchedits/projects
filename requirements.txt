@@ -3,3 +3,4 @@ streamlit-autorefresh
 openai
 huggingface_hub
 requests
+streamlit_shortcuts
