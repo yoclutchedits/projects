@@ -174,8 +174,8 @@ def send_otp_email(to_address, code):
 def login_ui():
     st.title("Login")
     st.session_state.setdefault("login_attempts", 0)
-    user = st.text_input("username:", placeholder="enter your username here:")
-    password = st.text_input("password:", placeholder="enter your password here:", type="password")
+    user = st.text_input("username:", placeholder="Enter your username here:")
+    password = st.text_input("password:", placeholder="Enter your password here:", type="password")
 
     if st.button("Log in"):
         if st.session_state.login_attempts >= 5:
@@ -209,15 +209,15 @@ def create_acc_ui():
         st.session_state.signup_just_succeeded = False
 
     if st.session_state.otp_stage == "form":
-        user = st.text_input("Username:", placeholder="enter your username here")
+        user = st.text_input("Username:", placeholder="Enter your username here")
         if st.session_state.get("signup_failed_field") == "username":
             st.caption(f":red[{st.session_state.get('signup_failed_reason')}]")
 
-        password = st.text_input("Password:", placeholder="enter your password here:", type="password")
+        password = st.text_input("Password:", placeholder="Enter your password here:", type="password")
         if st.session_state.get("signup_failed_field") == "password":
             st.caption(f":red[{st.session_state.get('signup_failed_reason')}]")
 
-        email = st.text_input("Email", placeholder="enter your email here:")
+        email = st.text_input("Email", placeholder="Enter your email here:")
         if st.session_state.get("signup_failed_field") == "email":
             st.caption(f":red[{st.session_state.get('signup_failed_reason')}]")
 
