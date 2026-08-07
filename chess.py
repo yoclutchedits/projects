@@ -189,7 +189,30 @@ def is_in_check(board, color):
                 if is_valid:
                     return True
     return False
-def has_any_legal_move(board, color):
+def is_en_passant_safe(board, start, end, last_move, color):
+    if not is_valid_en_passant(board, start, end, last_move):
+        return False
+
+    sr, sc = start
+    er, ec = end
+    piece = board[sr][sc]
+    captured_pawn = board[sr][ec]
+
+    # Temporarily simulate En Passant
+    board[er][ec] = piece
+    board[sr][sc] = None
+    board[sr][ec] = None
+
+    still_in_check = is_in_check(board, color)
+
+    # Revert board
+    board[sr][sc] = piece
+    board[er][ec] = None
+    board[sr][ec] = captured_pawn
+
+    return not still_in_check
+
+def has_any_legal_move(board, color, last_move=None):
     for sr in range(8):
         for sc in range(8):
             piece = board[sr][sc]
@@ -199,20 +222,17 @@ def has_any_legal_move(board, color):
                 for ec in range(8):
                     start = (sr, sc)
                     end = (er, ec)
-                    if is_valid_move(board, start, end):
-                        original_piece = board[er][ec]
-                        make_move(board, start, end, promote_to="Q")
-                        still_in_check = is_in_check(board, color)
-                        # ALWAYS undo, no matter what
-                        board[sr][sc] = piece
-                        board[er][ec] = original_piece
-                        if not still_in_check:
-                            return True
+                    if is_move_safe(board, start, end, color):
+                        return True
+                    if piece[1] == "P" and is_en_passant_safe(board, start, end, last_move, color):
+                        return True
     return False
-def is_checkmate(board, color):
-    return is_in_check(board, color) and not has_any_legal_move(board, color)
-def is_stalemate(board, color):
-    return not is_in_check(board, color) and not has_any_legal_move(board, color)
+
+def is_checkmate(board, color, last_move=None):
+    return is_in_check(board, color) and not has_any_legal_move(board, color, last_move)
+
+def is_stalemate(board, color, last_move=None):
+    return not is_in_check(board, color) and not has_any_legal_move(board, color, last_move)
 def is_move_safe(board, start, end, color):
     sr, sc = start
     er, ec = end
@@ -247,6 +267,43 @@ def is_insufficient_material(board):
 def castling(board, color, side):
     # will implement castling logic here in the future
     ...
-def en_passant(board, start, end):
-    # will implement en passant logic here in the future
-    ...
+def is_valid_en_passant(board, start, end, last_move):
+
+    if not last_move:
+        return False
+
+    sr, sc = start
+    er, ec = end
+    piece = board[sr][sc]
+
+    if piece is None or piece[1] != "P":
+        return False
+
+    color = piece[0]
+    direction = -1 if color == "w" else 1
+
+    # Must move one step diagonally into an empty destination
+    if er != sr + direction or abs(ec - sc) != 1 or board[er][ec] is not None:
+        return False
+
+    # Check last move: enemy pawn moved 2 ranks to land directly next to our pawn
+    (last_sr, last_sc), (last_er, last_ec), last_piece = last_move
+    enemy_color = "b" if color == "w" else "w"
+
+    if last_piece == enemy_color + "P":
+        if abs(last_er - last_sr) == 2 and last_er == sr and last_ec == ec:
+            return True
+
+    return False
+
+def make_en_passant(board, start, end):
+    sr, sc = start
+    er, ec = end
+    piece = board[sr][sc]
+
+    # Move current pawn
+    board[er][ec] = piece
+    board[sr][sc] = None
+
+    # Remove captured pawn (located on starting row, target column)
+    board[sr][ec] = None

@@ -7,7 +7,7 @@
 4)pygame prompt for pawn promotion✅,
 3)custom visual icon for the pieces✅,
 12)Ai,
-123a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
+13)a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
 7)Chess Clock (✅, but not fully implemented),
 6)Sound Effects✅,
 10)Board Flipping,
@@ -16,8 +16,11 @@
 11) when the game ends add a option to play a new game.
 '''
 import pygame
-from chess import create_board, is_insufficient_material, setup_pawns, setup_back_rank, is_move_safe, make_move,is_stalemate, is_checkmate, is_in_check , find_king
-
+from chess import (
+    create_board, is_insufficient_material, setup_pawns, setup_back_rank, 
+    is_move_safe, make_move, is_stalemate, is_checkmate, is_in_check, 
+    find_king, is_valid_en_passant, make_en_passant, is_en_passant_safe
+)
 pygame.init()
 
 board = create_board()
@@ -75,49 +78,54 @@ def draw_board():
 
     board_rect = pygame.Rect(BOARD_ORIGIN_X, BOARD_ORIGIN_Y, BOARD_SIZE, BOARD_SIZE)
     pygame.draw.rect(screen, BORDER_COLOR, board_rect, BORDER_WIDTH)
-
 def draw_check_indicator(king_in_check_square):
         if king_in_check_square is not None:
             row, col = king_in_check_square
             pygame.draw.rect(screen, (255, 0, 0), (BOARD_ORIGIN_X + col*SQUARE_SIZE, BOARD_ORIGIN_Y + row*SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 5)
-
 def format_time(seconds):
     seconds = max(0, int(seconds))
     minutes = seconds // 60
     secs = seconds % 60
     return f"{minutes:02}:{secs:02}"
-
 def draw_clocks(white_time, black_time):
     white_text = FONT.render(f"White: {format_time(white_time)}", True, (255, 255, 255))
     black_text = FONT.render(f"Black: {format_time(black_time)}", True, (255, 255, 255))
     screen.blit(white_text, (BOARD_ORIGIN_X + BOARD_SIZE - 150, BOARD_ORIGIN_Y + 10))
     screen.blit(black_text, (BOARD_ORIGIN_X + BOARD_SIZE - 150, BOARD_ORIGIN_Y + 40))
-
-def get_valid_moves(selected_square, current_player):
-    """Scans all 64 squares to find legal target squares for the selected piece."""
+def get_valid_moves(selected_square, current_player, last_move):
     if selected_square is None:
         return []
-    
+
     valid_moves = []
+    sr, sc = selected_square
+    moving_piece = board[sr][sc]
+
     for r in range(8):
         for c in range(8):
             target = (r, c)
             if is_move_safe(board, selected_square, target, current_player):
                 valid_moves.append(target)
+            elif moving_piece and moving_piece[1] == "P":
+                if is_en_passant_safe(board, selected_square, target, last_move, current_player):
+                    valid_moves.append(target)
     return valid_moves
-
-def draw_valid_moves(valid_moves):
-    """Renders small dots on empty valid squares and red rings on capture targets."""
+def draw_valid_moves(valid_moves, selected_square=None, last_move=None):
     for row, col in valid_moves:
         center_x = BOARD_ORIGIN_X + col * SQUARE_SIZE + SQUARE_SIZE // 2
         center_y = BOARD_ORIGIN_Y + row * SQUARE_SIZE + SQUARE_SIZE // 2
         target_piece = board[row][col]
 
-        if target_piece is None:
+        is_ep = False
+        if selected_square:
+            sr, sc = selected_square
+            p = board[sr][sc]
+            if p and p[1] == "P" and is_en_passant_safe(board, selected_square, (row, col), last_move, p[0]):
+                is_ep = True
+
+        if target_piece is None and not is_ep:
             pygame.draw.circle(screen, DOT_COLOR, (center_x, center_y), SQUARE_SIZE // 6)
         else:
             pygame.draw.circle(screen, CAPTURE_COLOR, (center_x, center_y), SQUARE_SIZE // 2 - 4, 4)
-
 def draw_selected(selected_square):
     if selected_square is not None:
         row, col = selected_square
@@ -127,14 +135,12 @@ def draw_selected(selected_square):
             (BOARD_ORIGIN_X + col * SQUARE_SIZE, BOARD_ORIGIN_Y + row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE),
             4
         )
-
 def draw_message(message):
     if message:
         text = FONT.render(message, True, (255, 255, 255))
         bg_rect = pygame.Rect(10, SCREEN_HEIGHT - 35, text.get_width() + 10, 30)
         pygame.draw.rect(screen, (200, 0, 0), bg_rect)
         screen.blit(text, (15, SCREEN_HEIGHT - 32))
-
 def draw_promotion_prompt():
     if promotion_pending is None:
         return
@@ -148,7 +154,6 @@ def draw_promotion_prompt():
         y = BOARD_ORIGIN_Y + row * SQUARE_SIZE + i * SQUARE_SIZE * direction
         pygame.draw.rect(screen, (50, 50, 50), (x, y, SQUARE_SIZE, SQUARE_SIZE))
         screen.blit(image, (x, y))
-
 def draw_pieces(board):
     for row in range(8):
         for col in range(8):
@@ -156,7 +161,6 @@ def draw_pieces(board):
             if piece is not None:
                 image = PIECE_IMAGES[piece]
                 screen.blit(image, (BOARD_ORIGIN_X + col * SQUARE_SIZE, BOARD_ORIGIN_Y + row * SQUARE_SIZE))
-
 white_time = 600  # seconds (10 minutes)
 black_time = 600
 running = True
@@ -168,6 +172,7 @@ play_error_sfx = False
 game_over = False
 promotion_pending = None
 king_in_check_square = None
+last_move = None
 #last_tick = pygame.time.get_ticks()
 
 
@@ -219,7 +224,7 @@ while running:
                                 king_in_check_square = find_king(board, current_player)
                             else:
                                 king_in_check_square = None
-                            if is_checkmate(board, current_player):
+                            if is_checkmate(board, current_player, last_move):
                                 error_message = f"Checkmate! {'Black' if current_player == 'w' else 'White'} wins!"
                                 checkmate_sfx.play()
                                 victory_sfx.play()
@@ -228,7 +233,7 @@ while running:
                                 error_message = "Draw — insufficient material!"
                                 defeat_sfx.play()
                                 game_over = True
-                            elif is_stalemate(board, current_player):
+                            elif is_stalemate(board, current_player, last_move):
                                 error_message = "Stalemate — it's a draw!"
                                 defeat_sfx.play()
                                 game_over = True
@@ -241,7 +246,7 @@ while running:
             if selected_square is None:
                 if piece_at_click is not None and piece_at_click[0] == current_player:
                     selected_square = clicked
-                    valid_moves = get_valid_moves(selected_square, current_player)
+                    valid_moves = get_valid_moves(selected_square, current_player, last_move)
                     error_message = ""
             else:
                 if clicked == selected_square:
@@ -249,18 +254,29 @@ while running:
                     valid_moves = []
                 elif piece_at_click is not None and piece_at_click[0] == current_player:
                     selected_square = clicked
-                    valid_moves = get_valid_moves(selected_square, current_player)
+                    valid_moves = get_valid_moves(selected_square, current_player, last_move)
                     error_message = ""
                 else:
                     moving_piece = board[selected_square[0]][selected_square[1]]
-                    if is_move_safe(board, selected_square, clicked, current_player):
-                        was_capture = board[clicked[0]][clicked[1]] is not None
-                        make_move(board, selected_square, clicked, promote_to="Q")
+                    is_ep = (
+                        moving_piece is not None
+                        and moving_piece[1] == "P"
+                        and is_en_passant_safe(board, selected_square, clicked, last_move, current_player)
+                    )
+                    is_standard_safe = is_move_safe(board, selected_square, clicked, current_player)
+                    if is_ep or is_standard_safe:
+                        was_capture = board[clicked[0]][clicked[1]] is not None or is_ep
+                        if is_ep:
+                            make_en_passant(board, selected_square, clicked)
+                        else:
+                            make_move(board, selected_square, clicked, promote_to="Q")
                         if was_capture:
                             capture_sfx.play()
                         else:
                             move_sfx.play()
                         error_message = ""
+                        # Track the last move for En Passant validation
+                        last_move = (selected_square, clicked, moving_piece)
                         if moving_piece[1] == "P" and (clicked[0] == 0 or clicked[0] == 7):
                             promotion_pending = (clicked[0], clicked[1], moving_piece[0])
                         else:
@@ -270,7 +286,7 @@ while running:
                                 king_in_check_square = find_king(board, current_player)
                             else:
                                 king_in_check_square = None
-                            if is_checkmate(board, current_player):
+                            if is_checkmate(board, current_player, last_move):
                                 error_message = f"Checkmate! {'Black' if current_player == 'w' else 'White'} wins!"
                                 checkmate_sfx.play()
                                 victory_sfx.play()
@@ -280,7 +296,7 @@ while running:
                                 play_error_sfx = True
                                 defeat_sfx.play()
                                 game_over = True
-                            elif is_stalemate(board, current_player):
+                            elif is_stalemate(board, current_player, last_move):
                                 error_message = "Stalemate — it's a draw!"
                                 play_error_sfx = True
                                 defeat_sfx.play()
@@ -296,7 +312,7 @@ while running:
 
     draw_board()
     load_piece_images()
-    draw_valid_moves(valid_moves)  
+    draw_valid_moves(valid_moves, selected_square, last_move)
     draw_pieces(board)
     draw_cordinates()
     draw_selected(selected_square)
