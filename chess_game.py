@@ -44,13 +44,13 @@ BORDER_WIDTH = 4
 
 FONT = pygame.font.SysFont("arial", 24)
 clock = pygame.time.Clock()
-capture_sfx=pygame.mixer.Sound("python/sfx/Capture.mp3")
-check_sfx=pygame.mixer.Sound("python/sfx/Check.mp3")
-checkmate_sfx=pygame.mixer.Sound("python/sfx/Checkmate.mp3")
-move_sfx=pygame.mixer.Sound("python/sfx/Move.mp3")
-defeat_sfx=pygame.mixer.Sound("python/sfx/Defeat.mp3")
-victory_sfx=pygame.mixer.Sound("python/sfx/Victory.mp3")
-error_sfx=pygame.mixer.Sound("python/sfx/Error.mp3")
+capture_sfx=pygame.mixer.Sound("projects/sfx/Capture.mp3")
+check_sfx=pygame.mixer.Sound("projects/sfx/Check.mp3")
+checkmate_sfx=pygame.mixer.Sound("projects/sfx/Checkmate.mp3")
+move_sfx=pygame.mixer.Sound("projects/sfx/Move.mp3")
+defeat_sfx=pygame.mixer.Sound("projects/sfx/Defeat.mp3")
+victory_sfx=pygame.mixer.Sound("projects/sfx/Victory.mp3")
+error_sfx=pygame.mixer.Sound("projects/sfx/Error.mp3")
 
 PIECE_IMAGES = {}
 def draw_cordinates():
@@ -64,7 +64,7 @@ def load_piece_images():
     piece_codes = ["wK", "wQ", "wR", "wB", "wN", "wP",
                 "bK", "bQ", "bR", "bB", "bN", "bP"]
     for code in piece_codes:
-        image = pygame.image.load(f"python/pieces/{code}.png")
+        image = pygame.image.load(f"projects/pieces/{code}.png")
         image = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
         PIECE_IMAGES[code] = image
 def draw_board():
