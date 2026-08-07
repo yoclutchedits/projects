@@ -4,3 +4,4 @@ openai
 huggingface_hub
 requests
 streamlit_shortcuts
+pygame
