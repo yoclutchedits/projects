@@ -2,7 +2,7 @@
 1)draw ✅,
 2)stalemate✅,
 2.5)checkmate✅,
-8)en passant,
+8)en passant✅,
 9)castling,
 4)pygame prompt for pawn promotion✅,
 3)custom visual icon for the pieces✅,
