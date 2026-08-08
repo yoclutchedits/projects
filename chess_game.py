@@ -141,6 +141,13 @@ def get_valid_moves(selected_square, current_player, last_move):
             elif moving_piece and moving_piece[1] == "P":
                 if is_en_passant_safe(board, selected_square, target, last_move, current_player):
                     valid_moves.append(target)
+
+    if moving_piece and moving_piece[1] == "K":
+        if is_castling_legal(board, current_player, "kingside", has_moved):
+            valid_moves.append((sr, sc + 2))
+        if is_castling_legal(board, current_player, "queenside", has_moved):
+            valid_moves.append((sr, sc - 2))
+
     return valid_moves
 
 def draw_valid_moves(valid_moves, selected_square=None, last_move=None):
@@ -156,11 +163,13 @@ def draw_valid_moves(valid_moves, selected_square=None, last_move=None):
             if p and p[1] == "P" and is_en_passant_safe(board, selected_square, (row, col), last_move, p[0]):
                 is_ep = True
 
-        if target_piece is None and not is_ep:
-            pygame.draw.circle(screen, DOT_COLOR, (center_x, center_y), SQUARE_SIZE // 6)
-        else:
-            pygame.draw.circle(screen, CAPTURE_COLOR, (center_x, center_y), SQUARE_SIZE // 2 - 4, 4)
+        mover = board[selected_square[0]][selected_square[1]] if selected_square else None
+        is_enemy_piece = target_piece is not None and mover is not None and target_piece[0] != mover[0]
 
+        if is_enemy_piece or is_ep:
+            pygame.draw.circle(screen, CAPTURE_COLOR, (center_x, center_y), SQUARE_SIZE // 2 - 4, 4)
+        else:
+            pygame.draw.circle(screen, DOT_COLOR, (center_x, center_y), SQUARE_SIZE // 6)
 def draw_selected(selected_square):
     if selected_square is not None:
         row, col = selected_square
@@ -376,6 +385,8 @@ while running:
                             error_message = "Stalemate — it's a draw!"
                             defeat_sfx.play()
                             game_over = True
+                        selected_square = None 
+                        valid_moves = [] 
                     else:
                         is_standard_safe = is_move_safe(board, selected_square, clicked, current_player)
                         if is_ep or is_standard_safe:
