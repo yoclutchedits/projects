@@ -8,9 +8,9 @@
 3)custom visual icon for the pieces✅,
 12)Ai✅,
 13)a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
-7)Chess Clock (✅, but not fully implemented),disabled for now, will be added when the menu or sidebar is added, so that the player can choose to flip the board or not
+7)Chess Clock (✅, but not fully implemented),
 6)Sound Effects✅,
-10)Board Flipping(✅, but not fully implemented),
+10)Board Flipping ✅,
 5)visual indicators for check and checkmate✅
 11) when the game ends add a option to play a new game✅.
 '''
@@ -103,7 +103,6 @@ def get_all_legal_moves_for_player(board, color, last_move):
                     legal_moves.append((start, end))
     return legal_moves
 
-
 def get_groq_move(board, color, last_move, history):
     legal_moves = get_all_legal_moves_for_player(board, color, last_move)
     if not legal_moves:
@@ -122,18 +121,18 @@ def get_groq_move(board, color, last_move, history):
 
     prompt = f"""You are playing chess as Black ('b'). 
 
-Recent move history:
-{recent_history}
+    Recent move history:
+    {recent_history}
 
-Current board state (row 0 is Black's back rank, row 7 is White's back rank):
-{board_str}
+    Current board state (row 0 is Black's back rank, row 7 is White's back rank):
+    {board_str}
 
-List of legal moves formatted as sr,sc->er,ec:
-{moves_str}
+    List of legal moves formatted as sr,sc->er,ec:
+    {moves_str}
 
-Analyze the sequence of moves and current position to evaluate tactical plans.
-Select the single best move from the legal moves list "the best move dont go easy".
-Respond ONLY with the move in format 'sr,sc->er,ec' without any extra text or explanation."""
+    Analyze the sequence of moves and current position to evaluate tactical plans.
+    Select the single best move from the legal moves list "the best move dont go easy".
+    Respond ONLY with the move in format 'sr,sc->er,ec' without any extra text or explanation."""
 
     try:
         response = client.chat.completions.create(
@@ -192,6 +191,7 @@ def reset_game():
         ("b", "R", "queenside"): False,
     }
     play_again_button_rect = None
+
 def draw_play_again_button():
     if not game_over:
         return
@@ -311,6 +311,7 @@ def draw_valid_moves(valid_moves, selected_square=None, last_move=None):
             pygame.draw.circle(screen, CAPTURE_COLOR, (center_x, center_y), SQUARE_SIZE // 2 - 4, 4)
         else:
             pygame.draw.circle(screen, DOT_COLOR, (center_x, center_y), SQUARE_SIZE // 6)
+
 def draw_selected(selected_square):
     if selected_square is not None:
         row, col = selected_square
@@ -432,9 +433,6 @@ while running:
         elif black_time <= 0:
             error_message = "Black ran out of time. White wins!"
             game_over = True'''
-        '''if event.type == pygame.KEYDOWN:
-                if board_flipped:
-                    board_flipped = not board_flipped''' #disabled for now, will be added when the menu or sidebar is added, so that the player can choose to flip the board or not
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -479,7 +477,8 @@ while running:
                                 board[prom_row][prom_col] = prom_color + promote_to
                                 promotion_pending = None
                                 current_player = "b" if current_player == "w" else "w"
-                                #board_flipped = (current_player == "b")
+                                if ai_mode != True:
+                                    board_flipped = (current_player == "b")
                                 king_in_check = is_in_check(board, current_player) if not game_over else False
                                 if king_in_check:
                                     king_in_check_square = find_king(board, current_player)
@@ -533,7 +532,8 @@ while running:
                                 promotion_pending = (clicked[0], clicked[1], moving_piece[0])
                             else:
                                 current_player = "b" if current_player == "w" else "w"
-                                #board_flipped = (current_player == "b")
+                                if ai_mode != True:
+                                    board_flipped = (current_player == "b")
                                 king_in_check = is_in_check(board, current_player) if not game_over else False
                                 if king_in_check:
                                     king_in_check_square = find_king(board, current_player)
@@ -595,7 +595,8 @@ while running:
                             error_message = ""
                             last_move = (selected_square, clicked, moving_piece)
                             current_player = "b" if current_player == "w" else "w"
-                            #board_flipped = (current_player == "b")
+                            if ai_mode != True:
+                                board_flipped = (current_player == "b")
                             king_in_check = is_in_check(board, current_player) if not game_over else False
                             if king_in_check:
                                 king_in_check_square = find_king(board, current_player)
@@ -645,7 +646,8 @@ while running:
                                     promotion_pending = (clicked[0], clicked[1], moving_piece[0])
                                 else:
                                     current_player = "b" if current_player == "w" else "w"
-                                    #board_flipped = (current_player == "b")
+                                    if ai_mode != True:
+                                        board_flipped = (current_player == "b")
                                     king_in_check = is_in_check(board, current_player) if not game_over else False
                                     if king_in_check:
                                         king_in_check_square = find_king(board, current_player)
