@@ -1,19 +1,3 @@
-'''add 
-1)draw ✅,
-2)stalemate✅,
-2.5)checkmate✅,
-8)en passant✅,
-9)castling✅,
-4)pygame prompt for pawn promotion✅,
-3)custom visual icon for the pieces✅,
-12)Ai✅,
-13)a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
-7)Chess Clock (✅, but not fully implemented),
-6)Sound Effects✅,
-10)Board Flipping ✅,
-5)visual indicators for check and checkmate✅
-11) when the game ends add a option to play a new game✅.
-'''
 from groq import Groq
 import threading
 import random
@@ -39,6 +23,9 @@ setup_back_rank(board)
 
 pygame.mixer.init()
 
+SIDEBAR_WIDTH = 250
+
+
 SQUARE_SIZE = 60
 
 BOARD_SIZE = 8 * SQUARE_SIZE
@@ -50,6 +37,9 @@ SCREEN_HEIGHT = 700
 BOARD_ORIGIN_X = (SCREEN_WIDTH - BOARD_SIZE) // 2
 
 BOARD_ORIGIN_Y = (SCREEN_HEIGHT - BOARD_SIZE) // 2
+
+SIDEBAR_X = BOARD_ORIGIN_X + BOARD_SIZE + 30
+
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
@@ -155,6 +145,52 @@ def get_groq_move(board, color, last_move, history):
 
 play_again_button_rect = None
 
+def draw_turn_indicator():
+    text = f"Turn: {'White' if current_player == 'w' else 'Black'}"
+    turn_text = FONT.render(text, True, (255, 255, 255))
+    screen.blit(turn_text, (SIDEBAR_X, BOARD_ORIGIN_Y))
+
+def auto_scroll_history():
+    global history_scroll
+    item_height = 22
+    container_h = 280
+    total_content_height = len(move_history) * item_height
+    history_scroll = max(0, total_content_height - container_h)
+
+def draw_move_history():
+    global history_scroll
+
+    header = FONT.render("Move History", True, (255, 255, 255))
+    screen.blit(header, (SIDEBAR_X, BOARD_ORIGIN_Y + 40))
+
+    # Bounding box for move text
+    container_x = SIDEBAR_X
+    container_y = BOARD_ORIGIN_Y + 75
+    container_w = SIDEBAR_WIDTH
+    container_h = 280  # Keeps moves above the Captured section
+
+    clip_rect = pygame.Rect(container_x, container_y, container_w, container_h)
+
+    item_height = 22
+    total_content_height = len(move_history) * item_height
+
+    # Restrict scroll offset to valid bounds
+    max_scroll = max(0, total_content_height - container_h)
+    history_scroll = max(0, min(history_scroll, max_scroll))
+
+    # Clip screen rendering to the move list box
+    screen.set_clip(clip_rect)
+
+    y_offset = container_y - history_scroll
+    for move in move_history:
+        if container_y - item_height <= y_offset <= container_y + container_h:
+            move_text = FONT.render(move, True, (200, 200, 200))
+            screen.blit(move_text, (container_x, y_offset))
+        y_offset += item_height
+
+    # Restore normal full-screen drawing
+    screen.set_clip(None)
+
 def square_to_notation(square):
     row, col = square
     return f"{chr(ord('a') + col)}{8 - row}"
@@ -165,9 +201,11 @@ def reset_game():
     global board, current_player, selected_square, valid_moves, error_message, play_again_button_rect
     global game_over, promotion_pending, king_in_check_square, last_move, has_moved, board_flipped, mode_selected
     global ai_thinking, ai_chosen_move
-    global move_history
+    global move_history,captured_pieces,history_scroll
     move_history = []
     board = create_board()
+    history_scroll = 0
+    captured_pieces = []
     setup_pawns(board)
     setup_back_rank(board)
     current_player = "w"
@@ -254,17 +292,6 @@ def draw_check_indicator(king_in_check_square):
             x, y = to_screen_coords(row, col)
             pygame.draw.rect(screen, (255, 0, 0), (x, y, SQUARE_SIZE, SQUARE_SIZE), 5)
 
-def format_time(seconds):
-    seconds = max(0, int(seconds))
-    minutes = seconds // 60
-    secs = seconds % 60
-    return f"{minutes:02}:{secs:02}"
-
-def draw_clocks(white_time, black_time):
-    white_text = FONT.render(f"White: {format_time(white_time)}", True, (255, 255, 255))
-    black_text = FONT.render(f"Black: {format_time(black_time)}", True, (255, 255, 255))
-    screen.blit(white_text, (BOARD_ORIGIN_X + BOARD_SIZE - 150, BOARD_ORIGIN_Y + 10))
-    screen.blit(black_text, (BOARD_ORIGIN_X + BOARD_SIZE - 150, BOARD_ORIGIN_Y + 40))
 
 def get_valid_moves(selected_square, current_player, last_move):
     if selected_square is None:
@@ -368,6 +395,16 @@ def fetch_ai_move_async(board_copy, color, last_move_copy, history_copy):
     ai_chosen_move = get_groq_move(board_copy, color, last_move_copy, history_copy)
     ai_thinking = False
 
+def draw_captured_pieces():
+    white_captured = [p for p in captured_pieces if p[0] == "w"]
+    black_captured = [p for p in captured_pieces if p[0] == "b"]
+    header = FONT.render("Captured:", True, (255, 255, 255))
+    screen.blit(header, (SIDEBAR_X, BOARD_ORIGIN_Y + BOARD_SIZE - 100))
+    w_text = FONT.render("White: " + " ".join(white_captured), True, (200, 200, 200))
+    b_text = FONT.render("Black: " + " ".join(black_captured), True, (200, 200, 200))
+    screen.blit(w_text, (SIDEBAR_X, BOARD_ORIGIN_Y + BOARD_SIZE - 70))
+    screen.blit(b_text, (SIDEBAR_X, BOARD_ORIGIN_Y + BOARD_SIZE - 45))
+
 white_time = 600  # seconds (10 minutes)
 
 black_time = 600
@@ -404,8 +441,9 @@ ai_thinking = False
 
 ai_chosen_move = None
 
-#last_tick = pygame.time.get_ticks()
+history_scroll = 0
 
+captured_pieces = []
 has_moved = {
     ("w", "K"): False, ("b", "K"): False,
     ("w", "R", "kingside"): False, ("w", "R", "queenside"): False,
@@ -417,24 +455,11 @@ play_again_button_rect = None
 load_piece_images()
 while running:
     for event in pygame.event.get():
-        # add when we add the sidebar,to move the clocks to the sidebar, and start the clock as soon as the first move is made, and pause the clock when the game is over, and reset the clock when a new game starts
-        '''now = pygame.time.get_ticks()
-        elapsed = (now - last_tick) / 1000  # convert ms to seconds
-        last_tick = now
-
-        if not game_over:
-            if current_player == "w":
-                white_time -= elapsed
-            else:
-                black_time -= elapsed
-        if white_time <= 0:
-            error_message = "White ran out of time. Black wins!"
-            game_over = True
-        elif black_time <= 0:
-            error_message = "Black ran out of time. White wins!"
-            game_over = True'''
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.MOUSEWHEEL:
+            # Scroll up/down over move history
+            history_scroll -= event.y * 20
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if not mode_selected:
                 x, y = event.pos
@@ -442,12 +467,13 @@ while running:
                 if (SCREEN_WIDTH // 2 - 120 <= x <= SCREEN_WIDTH // 2 - 20 and SCREEN_HEIGHT // 2 + 10 <= y <= SCREEN_HEIGHT // 2 + 40):
                     ai_mode = True
                     mode_selected = True
+                    continue
                 # Human Button bounds
                 elif (SCREEN_WIDTH // 2 + 20 <= x <= SCREEN_WIDTH // 2 + 120 and SCREEN_HEIGHT // 2 + 10 <= y <= SCREEN_HEIGHT // 2 + 40):
                     ai_mode = False
                     mode_selected = True
                     continue
-
+        
             if game_over:
                 if (play_again_button_rect is not None and play_again_button_rect.collidepoint(event.pos)):
                     reset_game()
@@ -508,14 +534,18 @@ while running:
                         )
                         if is_ep or is_move_safe(board, ai_selection_pending[0], clicked, current_player):
                             was_capture = board[clicked[0]][clicked[1]] is not None or is_ep
+                            captured = board[clicked[0]][clicked[1]] if not is_ep else board[selected_square[0]][clicked[1]]
                             if is_ep:
                                 make_en_passant(board, ai_selection_pending[0], clicked)
-                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(ai_selection_pending[0])} -> {square_to_notation(clicked)}")
                             else:
                                 make_move(board, ai_selection_pending[0], clicked, promote_to="Q")
-                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(ai_selection_pending[0])} -> {square_to_notation(clicked)}")
                             if was_capture:
                                 capture_sfx.play()
+                                if captured:
+                                    captured_pieces.append(captured)
+                                    auto_scroll_history()
                             else:
                                 move_sfx.play()
                             error_message = ""
@@ -590,7 +620,7 @@ while running:
                                 is_castle = is_castling_legal(board, current_player, castle_side, has_moved)
                         if is_castle:
                             make_castle(board, current_player, castle_side)
-                            move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                            move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(selected_square)} -> {square_to_notation(clicked)}")
                             move_sfx.play()
                             error_message = ""
                             last_move = (selected_square, clicked, moving_piece)
@@ -621,6 +651,7 @@ while running:
                             is_standard_safe = is_move_safe(board, selected_square, clicked, current_player)
                             if is_ep or is_standard_safe:
                                 was_capture = board[clicked[0]][clicked[1]] is not None or is_ep
+                                captured = board[clicked[0]][clicked[1]] if not is_ep else board[selected_square[0]][clicked[1]]
                                 if is_ep:
                                     make_en_passant(board, selected_square, clicked)
                                     move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(selected_square)} -> {square_to_notation(clicked)}")
@@ -629,6 +660,9 @@ while running:
                                     move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(selected_square)} -> {square_to_notation(clicked)}")
                                 if was_capture:
                                     capture_sfx.play()
+                                    if captured:
+                                        captured_pieces.append(captured)
+                                        auto_scroll_history()
                                 else:
                                     move_sfx.play()
                                 error_message = ""
@@ -723,9 +757,13 @@ while running:
                 capture_sfx.play()
             else:
                 was_capture = board[end[0]][end[1]] is not None
+                captured = board[clicked[0]][clicked[1]] if not is_ep else board[selected_square[0]][clicked[1]]
                 make_move(board, start, end, promote_to="Q")
                 if was_capture:
                     capture_sfx.play()
+                    if captured:
+                        captured_pieces.append(captured)
+                        auto_scroll_history()
                 else:
                     move_sfx.play()
                 move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
@@ -762,13 +800,15 @@ while running:
     draw_selected(selected_square)
     draw_check_indicator(king_in_check_square)
     draw_message(error_message)
+    draw_captured_pieces()
 
     if play_error_sfx:
         error_sfx.play()
         play_error_sfx = False
 
     draw_promotion_prompt()
-
+    draw_turn_indicator()
+    draw_move_history()
     if not mode_selected:
         draw_choose_ai_or_human()
 
