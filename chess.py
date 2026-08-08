@@ -2,23 +2,28 @@
 def create_board():
     board = [[None for _ in range(8)] for _ in range(8)]
     return board
+
 def print_board(board):
     for row in board:
         line = ""
         for cell in row:
             line += (cell if cell else "..") + " "
         print(line)
+
 def place_piece(board, row, col, piece):
     board[row][col] = piece
+
 def setup_pawns(board):
     for col in range(8):
         place_piece(board, 1, col, "bP")
         place_piece(board, 6, col, "wP")
+
 def setup_back_rank(board):
     order = ["R", "N", "B", "Q", "K", "B", "N", "R"]
     for col, piece_type in enumerate(order):
         place_piece(board, 0, col, "b" + piece_type)
         place_piece(board, 7, col, "w" + piece_type)
+
 def is_valid_pawn_move(board, start, end):
     sr, sc = start
     er, ec = end
@@ -45,6 +50,7 @@ def is_valid_pawn_move(board, start, end):
     and target[0] != color
 )
     return one_step or two_step or capture
+
 def is_valid_king_move(board, start, end):
     sr, sc = start
     er, ec = end
@@ -58,6 +64,7 @@ def is_valid_king_move(board, start, end):
     if (row_diff <= 1 and col_diff <= 1) and (row_diff != 0 or col_diff != 0)  and (target is None or target[0] != color):
         return True
     return False
+
 def is_valid_rook_move(board, start, end):
     sr, sc = start
     er, ec = end
@@ -84,6 +91,7 @@ def is_valid_rook_move(board, start, end):
                     return False  # path blocked
         return True
     return False
+
 def is_valid_bishop_move(board, start, end):
     sr, sc = start
     er, ec = end
@@ -105,6 +113,7 @@ def is_valid_bishop_move(board, start, end):
                 return False  # path blocked
         return True
     return False
+
 def is_valid_queen_move(board, start, end):
     sr, sc = start
     piece = board[sr][sc]
@@ -119,6 +128,7 @@ def is_valid_queen_move(board, start, end):
     board[sr][sc] = piece  # restore the real queen
 
     return rook_style or bishop_style
+
 def is_valid_knight_move(board, start, end):
     sr, sc = start
     er, ec = end
@@ -135,6 +145,7 @@ def is_valid_knight_move(board, start, end):
         if target is None or target[0] != color:
             return True
     return False
+
 def is_valid_move(board, start, end):
     sr, sc = start
     piece = board[sr][sc]
@@ -155,6 +166,7 @@ def is_valid_move(board, start, end):
     elif piece_type == "N":
         return is_valid_knight_move(board, start, end)
     return False
+
 def make_move(board, start, end, promote_to=None):
     sr, sc = start
     er, ec = end
@@ -171,6 +183,7 @@ def make_move(board, start, end, promote_to=None):
                 else:
                     print("Invalid promotion choice. Please choose Q, R, B, or N.")
         board[er][ec] = piece[0] + promote_to
+
 def find_king(board, color):
     for row in range(8):
         for col in range(8):
@@ -178,6 +191,7 @@ def find_king(board, color):
             if piece is not None and piece[1] == "K" and piece[0] == color:
                 return (row, col)
     return None
+
 def is_in_check(board, color):
     king_pos = find_king(board, color)
     enemy_color = "b" if color == "w" else "w"
@@ -189,6 +203,7 @@ def is_in_check(board, color):
                 if is_valid:
                     return True
     return False
+
 def is_en_passant_safe(board, start, end, last_move, color):
     if not is_valid_en_passant(board, start, end, last_move):
         return False
@@ -233,6 +248,7 @@ def is_checkmate(board, color, last_move=None):
 
 def is_stalemate(board, color, last_move=None):
     return not is_in_check(board, color) and not has_any_legal_move(board, color, last_move)
+
 def is_move_safe(board, start, end, color):
     sr, sc = start
     er, ec = end
@@ -247,6 +263,7 @@ def is_move_safe(board, start, end, color):
     board[er][ec] = original_piece
 
     return not still_in_check
+
 def is_insufficient_material(board):
     pieces = []
     for row in range(8):
@@ -264,9 +281,7 @@ def is_insufficient_material(board):
         if p1[1] == "B" and p2[1] == "B" and p1[0] != p2[0]:
             return True  # king+bishop vs king+bishop, opposite sides
     return False
-def castling(board, color, side):
-    # will implement castling logic here in the future
-    ...
+
 def is_valid_en_passant(board, start, end, last_move):
 
     if not last_move:
@@ -307,3 +322,59 @@ def make_en_passant(board, start, end):
 
     # Remove captured pawn (located on starting row, target column)
     board[sr][ec] = None
+
+def is_square_attacked(board, square, by_color):
+    for row in range(8):
+        for col in range(8):
+            piece = board[row][col]
+            if piece is not None and piece[0] == by_color:
+                if is_valid_move(board, (row, col), square):
+                    return True
+    return False
+
+def is_castling_legal(board, color, side, has_moved):
+    """
+    side: "kingside" or "queenside"
+    """
+    king_row = 7 if color == "w" else 0
+    if side == "kingside":
+        if has_moved.get((color, "K"), True) or has_moved.get((color, "R", "kingside"), True):
+            return False # King or rook has moved
+        if board[king_row][5] is not None or board[king_row][6] is not None:
+            return False # Squares between king and rook are not empty
+        if is_in_check(board, color):
+            return False # King is in check
+        # Check if squares the king passes through are attacked
+        for col in [4, 5, 6]:
+            if is_square_attacked(board, (king_row, col), "b" if color == "w" else "w"):
+                return False
+        return True
+    elif side == "queenside": 
+        if has_moved.get((color, "K"), True) or has_moved.get((color, "R", "queenside"), True):
+            return False # King or rook has moved
+        if board[king_row][1] is not None or board[king_row][2] is not None or board[king_row][3] is not None:
+            return False # Squares between king and rook are not empty
+        if is_in_check(board, color):
+            return False # King is in check
+        # Check if squares the king passes through are attacked
+        for col in [4, 3, 2]:
+            if is_square_attacked(board, (king_row, col), "b" if color == "w" else "w"):
+                return False
+        return True
+
+def make_castle(board, color, side):
+    king_row = 7 if color == "w" else 0
+    if side == "kingside":
+        # king: col 4 -> col 6
+        # rook: col 7 -> col 5
+        board[king_row][6] = board[king_row][4]
+        board[king_row][4] = None
+        board[king_row][5] = board[king_row][7]
+        board[king_row][7] = None
+    else:  # queenside
+        # king: col 4 -> col 2
+        # rook: col 0 -> col 3
+        board[king_row][2] = board[king_row][4]
+        board[king_row][4] = None
+        board[king_row][3] = board[king_row][0]
+        board[king_row][0] = None
