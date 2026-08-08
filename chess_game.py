@@ -16,6 +16,7 @@
 '''
 from groq import Groq
 import threading
+import random
 from keys import g_key
 '''this is the key for the groq, which is used for AI moves
 input the key in the below line, and don't forget to uncomment the line below'''
