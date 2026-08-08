@@ -6,18 +6,18 @@
 9)castling✅,
 4)pygame prompt for pawn promotion✅,
 3)custom visual icon for the pieces✅,
-12)Ai,
+12)Ai✅,
 13)a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
 7)Chess Clock (✅, but not fully implemented),disabled for now, will be added when the menu or sidebar is added, so that the player can choose to flip the board or not
 6)Sound Effects✅,
 10)Board Flipping(✅, but not fully implemented),
 5)visual indicators for check and checkmate✅
-14) add a main menu
 11) when the game ends add a option to play a new game✅.
 '''
-from openai import OpenAI 
-from keys import g_key 
-'''this is the key for the OpenAI API, which is used to access the GPT-4 model for AI moves
+from groq import Groq
+import threading
+from keys import g_key
+'''this is the key for the groq, which is used for AI moves
 input the key in the below line, and don't forget to uncomment the line below'''
 #g_key="your_key_here"
 import pygame
@@ -66,6 +66,8 @@ BORDER_COLOR = (255, 255, 255)
 
 BORDER_WIDTH = 4
 
+client = Groq(api_key=g_key)
+
 FONT = pygame.font.SysFont("arial", 24)
 
 clock = pygame.time.Clock()
@@ -86,9 +88,85 @@ error_sfx=pygame.mixer.Sound("projects/sfx/Error.mp3")
 
 PIECE_IMAGES = {}
 
+
+
+def get_all_legal_moves_for_player(board, color, last_move):
+    legal_moves = []
+    for sr in range(8):
+        for sc in range(8):
+            piece = board[sr][sc]
+            if piece and piece[0] == color:
+                start = (sr, sc)
+                moves = get_valid_moves(start, color, last_move)
+                for end in moves:
+                    legal_moves.append((start, end))
+    return legal_moves
+
+
+def get_groq_move(board, color, last_move, history):
+    legal_moves = get_all_legal_moves_for_player(board, color, last_move)
+    if not legal_moves:
+        return None
+
+    moves_str = ", ".join([
+        f"{m[0]},{m[1]}->{m[2][0]},{m[2][1]}"
+        for m in [(start[0], start[1], end) for start, end in legal_moves]
+    ])
+    board_str = "\n".join(
+        [" ".join([cell if cell else ".." for cell in row]) for row in board]
+    )
+
+    # Show the last 10 moves for immediate tactical context
+    recent_history = "\n".join(history[-10:]) if history else "Game started."
+
+    prompt = f"""You are playing chess as Black ('b'). 
+
+Recent move history:
+{recent_history}
+
+Current board state (row 0 is Black's back rank, row 7 is White's back rank):
+{board_str}
+
+List of legal moves formatted as sr,sc->er,ec:
+{moves_str}
+
+Analyze the sequence of moves and current position to evaluate tactical plans.
+Select the single best move from the legal moves list "the best move dont go easy".
+Respond ONLY with the move in format 'sr,sc->er,ec' without any extra text or explanation."""
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        move_text = response.choices[0].message.content.strip()
+        start_part, end_part = move_text.split("->")
+        sr, sc = map(int, start_part.split(","))
+        er, ec = map(int, end_part.split(","))
+
+        chosen_move = ((sr, sc), (er, ec))
+        if chosen_move in legal_moves:
+            return chosen_move
+    except Exception as e:
+        print(f"Groq API error ({e}), picking fallback move.")
+
+    return random.choice(legal_moves)
+
+play_again_button_rect = None
+
+def square_to_notation(square):
+    row, col = square
+    return f"{chr(ord('a') + col)}{8 - row}"
+
+move_history = []
+
 def reset_game():
-    global board, current_player, selected_square, valid_moves, error_message,play_again_button_rect
-    global game_over, promotion_pending, king_in_check_square, last_move, has_moved, board_flipped
+    global board, current_player, selected_square, valid_moves, error_message, play_again_button_rect
+    global game_over, promotion_pending, king_in_check_square, last_move, has_moved, board_flipped, mode_selected
+    global ai_thinking, ai_chosen_move
+    global move_history
+    move_history = []
     board = create_board()
     setup_pawns(board)
     setup_back_rank(board)
@@ -100,14 +178,19 @@ def reset_game():
     promotion_pending = None
     king_in_check_square = None
     last_move = None
+    ai_thinking = False
+    ai_chosen_move = None
     board_flipped = False
+    mode_selected = False  # Triggers mode selection menu on reset
     has_moved = {
-        ("w", "K"): False, ("b", "K"): False,
-        ("w", "R", "kingside"): False, ("w", "R", "queenside"): False,
-        ("b", "R", "kingside"): False, ("b", "R", "queenside"): False,
+        ("w", "K"): False,
+        ("b", "K"): False,
+        ("w", "R", "kingside"): False,
+        ("w", "R", "queenside"): False,
+        ("b", "R", "kingside"): False,
+        ("b", "R", "queenside"): False,
     }
     play_again_button_rect = None
-
 def draw_play_again_button():
     if not game_over:
         return
@@ -135,6 +218,24 @@ def load_piece_images():
         image = pygame.image.load(f"projects/pieces/{code}.png")
         image = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
         PIECE_IMAGES[code] = image
+
+def draw_choose_ai_or_human():
+    prompt_rect = pygame.Rect(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 50, 300, 100)
+    pygame.draw.rect(screen, (50, 50, 50), prompt_rect)
+    pygame.draw.rect(screen, (255, 255, 255), prompt_rect, 2)
+
+    text = FONT.render("Play against AI?", True, (255, 255, 255))
+    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20))
+    screen.blit(text, text_rect)
+
+    ai_button_rect = pygame.Rect(SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2 + 10, 100, 30)
+    human_button_rect = pygame.Rect(SCREEN_WIDTH // 2 + 20, SCREEN_HEIGHT // 2 + 10, 100, 30)
+    pygame.draw.rect(screen, (100, 100, 100), ai_button_rect)
+    pygame.draw.rect(screen, (100, 100, 100), human_button_rect)
+    ai_text = FONT.render("AI", True, (255, 255, 255))
+    human_text = FONT.render("Human", True, (255, 255, 255))
+    screen.blit(ai_text, (SCREEN_WIDTH // 2 - 110, SCREEN_HEIGHT // 2 + 15))
+    screen.blit(human_text, (SCREEN_WIDTH // 2 + 30, SCREEN_HEIGHT // 2 + 15))
 
 def draw_board():
     for row in range(8):
@@ -260,6 +361,11 @@ def to_screen_coords(row, col):
     y = BOARD_ORIGIN_Y + row * SQUARE_SIZE
     return x, y
 
+def fetch_ai_move_async(board_copy, color, last_move_copy, history_copy):
+    global ai_chosen_move, ai_thinking
+    ai_chosen_move = get_groq_move(board_copy, color, last_move_copy, history_copy)
+    ai_thinking = False
+
 white_time = 600  # seconds (10 minutes)
 
 black_time = 600
@@ -270,11 +376,17 @@ selected_square = None
 
 valid_moves = []
 
+ai_mode=False 
+
+ai_selection_pending=False
+
 current_player = "w"
 
 error_message = ""
 
 board_flipped = False
+
+mode_selected = False  # Triggers mode selection menu on reset
 
 play_error_sfx = False
 
@@ -286,6 +398,10 @@ king_in_check_square = None
 
 last_move = None
 
+ai_thinking = False
+
+ai_chosen_move = None
+
 #last_tick = pygame.time.get_ticks()
 
 has_moved = {
@@ -295,7 +411,8 @@ has_moved = {
 }
 
 play_again_button_rect = None
-
+# Preload piece images ONCE outside the loop during setup
+load_piece_images()
 while running:
     for event in pygame.event.get():
         # add when we add the sidebar,to move the clocks to the sidebar, and start the clock as soon as the first move is made, and pause the clock when the game is over, and reset the clock when a new game starts
@@ -320,8 +437,20 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if not mode_selected:
+                x, y = event.pos
+                # AI Button bounds
+                if (SCREEN_WIDTH // 2 - 120 <= x <= SCREEN_WIDTH // 2 - 20 and SCREEN_HEIGHT // 2 + 10 <= y <= SCREEN_HEIGHT // 2 + 40):
+                    ai_mode = True
+                    mode_selected = True
+                # Human Button bounds
+                elif (SCREEN_WIDTH // 2 + 20 <= x <= SCREEN_WIDTH // 2 + 120 and SCREEN_HEIGHT // 2 + 10 <= y <= SCREEN_HEIGHT // 2 + 40):
+                    ai_mode = False
+                    mode_selected = True
+                    continue
+
             if game_over:
-                if play_again_button_rect is not None and play_again_button_rect.collidepoint(event.pos):
+                if (play_again_button_rect is not None and play_again_button_rect.collidepoint(event.pos)):
                     reset_game()
             else:
                 x, y = event.pos
@@ -369,6 +498,61 @@ while running:
                                     defeat_sfx.play()
                                     game_over = True
                                 break
+                elif ai_selection_pending:
+                    if clicked == ai_selection_pending[1]:
+                        moving_piece = board[ai_selection_pending[0][0]][ai_selection_pending[0][1]]
+                        is_ep = (
+                            moving_piece is not None
+                            and moving_piece[1] == "P"
+                            and is_en_passant_safe(board, ai_selection_pending[0], clicked, last_move, current_player)
+                        )
+                        if is_ep or is_move_safe(board, ai_selection_pending[0], clicked, current_player):
+                            was_capture = board[clicked[0]][clicked[1]] is not None or is_ep
+                            if is_ep:
+                                make_en_passant(board, ai_selection_pending[0], clicked)
+                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                            else:
+                                make_move(board, ai_selection_pending[0], clicked, promote_to="Q")
+                                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                            if was_capture:
+                                capture_sfx.play()
+                            else:
+                                move_sfx.play()
+                            error_message = ""
+                            if moving_piece[1] == "K":
+                                has_moved[(current_player, "K")] = True
+                            elif moving_piece[1] == "R":
+                                start_col = ai_selection_pending[0][1]
+                                if start_col == 0:
+                                    has_moved[(current_player, "R", "queenside")] = True
+                                elif start_col == 7:
+                                    has_moved[(current_player, "R", "kingside")] = True
+                            last_move = (ai_selection_pending[0], clicked, moving_piece)
+                            if moving_piece[1] == "P" and (clicked[0] == 0 or clicked[0] == 7):
+                                promotion_pending = (clicked[0], clicked[1], moving_piece[0])
+                            else:
+                                current_player = "b" if current_player == "w" else "w"
+                                #board_flipped = (current_player == "b")
+                                king_in_check = is_in_check(board, current_player) if not game_over else False
+                                if king_in_check:
+                                    king_in_check_square = find_king(board, current_player)
+                                else:
+                                    king_in_check_square = None
+                                if is_checkmate(board, current_player, last_move):
+                                    error_message = f"Checkmate! {'Black' if current_player == 'w' else 'White'} wins!"
+                                    checkmate_sfx.play()
+                                    victory_sfx.play()
+                                    game_over = True
+                                elif is_insufficient_material(board):
+                                    error_message = "Draw — insufficient material!"
+                                    defeat_sfx.play()
+                                    game_over = True
+                                elif is_stalemate(board, current_player, last_move):
+                                    error_message = "Stalemate — it's a draw!"
+                                    defeat_sfx.play()
+                                    game_over = True
+                            ai_selection_pending = False
+                
                 try:
                     piece_at_click = board[row][col]
                 except IndexError:
@@ -405,6 +589,7 @@ while running:
                                 is_castle = is_castling_legal(board, current_player, castle_side, has_moved)
                         if is_castle:
                             make_castle(board, current_player, castle_side)
+                            move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
                             move_sfx.play()
                             error_message = ""
                             last_move = (selected_square, clicked, moving_piece)
@@ -436,8 +621,10 @@ while running:
                                 was_capture = board[clicked[0]][clicked[1]] is not None or is_ep
                                 if is_ep:
                                     make_en_passant(board, selected_square, clicked)
+                                    move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(selected_square)} -> {square_to_notation(clicked)}")
                                 else:
                                     make_move(board, selected_square, clicked, promote_to="Q")
+                                    move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(selected_square)} -> {square_to_notation(clicked)}")
                                 if was_capture:
                                     capture_sfx.play()
                                 else:
@@ -487,21 +674,103 @@ while running:
                             selected_square = None
                             valid_moves = []
 
-    screen.fill((30, 30, 30))  # or any background color you like — dark gray shown here
+# Async AI Move Execution (Runs outside event loop without blocking UI)
+    if (
+        ai_mode
+        and mode_selected
+        and current_player == "b"
+        and not game_over
+        and promotion_pending is None
+    ):
+        if not ai_thinking and ai_chosen_move is None:
+            ai_thinking = True
+            board_copy = [row[:] for row in board]
+            threading.Thread(
+                target=fetch_ai_move_async,
+                args=(board_copy, "b", last_move, move_history[:]),
+                daemon=True,
+            ).start()
+
+        if ai_chosen_move is not None:
+            ai_move = ai_chosen_move
+            ai_chosen_move = None
+
+            start, end = ai_move
+            moving_piece = board[start[0]][start[1]]
+
+            is_ep = (
+                moving_piece is not None
+                and moving_piece[1] == "P"
+                and is_en_passant_safe(board, start, end, last_move, "b")
+            )
+            castle_side = None
+            if moving_piece and moving_piece[1] == "K":
+                if end == (start[0], start[1] + 2):
+                    castle_side = "kingside"
+                elif end == (start[0], start[1] - 2):
+                    castle_side = "queenside"
+
+            if castle_side and is_castling_legal(board, "b", castle_side, has_moved):
+                make_castle(board, "b", castle_side)
+                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                move_sfx.play()
+            elif is_ep:
+                make_en_passant(board, start, end)
+                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+                capture_sfx.play()
+            else:
+                was_capture = board[end[0]][end[1]] is not None
+                make_move(board, start, end, promote_to="Q")
+                if was_capture:
+                    capture_sfx.play()
+                else:
+                    move_sfx.play()
+                move_history.append(f"{'White' if current_player == 'w' else 'Black'} ({moving_piece}): {square_to_notation(start)} -> {square_to_notation(end)}")
+            last_move = (start, end, moving_piece)
+            current_player = "w"
+
+            if is_in_check(board, current_player):
+                king_in_check_square = find_king(board, current_player)
+                check_sfx.play()
+                error_message = "White king is in check!"
+            else:
+                king_in_check_square = None
+
+            if is_checkmate(board, current_player, last_move):
+                error_message = "Checkmate! Black wins!"
+                checkmate_sfx.play()
+                defeat_sfx.play()
+                game_over = True
+            elif is_insufficient_material(board):
+                error_message = "Draw — insufficient material!"
+                defeat_sfx.play()
+                game_over = True
+            elif is_stalemate(board, current_player, last_move):
+                error_message = "Stalemate — it's a draw!"
+                defeat_sfx.play()
+                game_over = True
+
+    # Render Section
+    screen.fill((30, 30, 30))
     draw_board()
-    load_piece_images()
     draw_valid_moves(valid_moves, selected_square, last_move)
     draw_pieces(board)
     draw_cordinates()
     draw_selected(selected_square)
-    #draw_clocks(white_time, black_time)
+    draw_check_indicator(king_in_check_square)
     draw_message(error_message)
+
     if play_error_sfx:
         error_sfx.play()
         play_error_sfx = False
+
     draw_promotion_prompt()
-    draw_check_indicator(king_in_check_square)
+
+    if not mode_selected:
+        draw_choose_ai_or_human()
+
     play_again_button_rect = draw_play_again_button()
+
     pygame.display.flip()
     clock.tick(60)
 
