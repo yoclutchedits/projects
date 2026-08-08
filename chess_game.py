@@ -8,7 +8,7 @@
 3)custom visual icon for the pieces✅,
 12)Ai,
 13)a sidebar showing active player turn, captured pieces, and move history in standard algebraic notation,
-7)Chess Clock (✅, but not fully implemented),
+7)Chess Clock (✅, but not fully implemented),disabled for now, will be added when the menu or sidebar is added, so that the player can choose to flip the board or not
 6)Sound Effects✅,
 10)Board Flipping(✅, but not fully implemented),
 5)visual indicators for check and checkmate✅
@@ -16,6 +16,7 @@
 11) when the game ends add a option to play a new game.
 '''
 import pygame
+
 from chess import (
     create_board, is_insufficient_material, setup_pawns, setup_back_rank, 
     is_move_safe, make_move, is_stalemate, is_checkmate, is_in_check, 
@@ -24,29 +25,45 @@ from chess import (
 pygame.init()
 
 board = create_board()
+
 setup_pawns(board)
+
 setup_back_rank(board)
 
 pygame.mixer.init()
 
 SQUARE_SIZE = 60
+
 BOARD_SIZE = 8 * SQUARE_SIZE
+
 SCREEN_WIDTH = 1000
+
 SCREEN_HEIGHT = 700
+
 BOARD_ORIGIN_X = (SCREEN_WIDTH - BOARD_SIZE) // 2
+
 BOARD_ORIGIN_Y = (SCREEN_HEIGHT - BOARD_SIZE) // 2
+
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
 pygame.display.set_caption("Chess with Move Guides")
 
 LIGHT = (240, 217, 181)
+
 DARK = (181, 136, 99)
+
 DOT_COLOR = (100, 110, 120)
+
 CAPTURE_COLOR = (220, 60, 60)
+
 BORDER_COLOR = (255, 255, 255)
+
 BORDER_WIDTH = 4
 
 FONT = pygame.font.SysFont("arial", 24)
+
 clock = pygame.time.Clock()
+
 capture_sfx=pygame.mixer.Sound("projects/sfx/Capture.mp3")
 
 check_sfx=pygame.mixer.Sound("projects/sfx/Check.mp3")
@@ -280,7 +297,7 @@ while running:
                             board[prom_row][prom_col] = prom_color + promote_to
                             promotion_pending = None
                             current_player = "b" if current_player == "w" else "w"
-                            board_flipped = (current_player == "b")
+                            #board_flipped = (current_player == "b")
                             king_in_check = is_in_check(board, current_player) if not game_over else False
                             if king_in_check:
                                 king_in_check_square = find_king(board, current_player)
@@ -340,7 +357,7 @@ while running:
                         error_message = ""
                         last_move = (selected_square, clicked, moving_piece)
                         current_player = "b" if current_player == "w" else "w"
-                        board_flipped = (current_player == "b")
+                        #board_flipped = (current_player == "b")
                         king_in_check = is_in_check(board, current_player) if not game_over else False
                         if king_in_check:
                             king_in_check_square = find_king(board, current_player)
@@ -386,7 +403,7 @@ while running:
                                 promotion_pending = (clicked[0], clicked[1], moving_piece[0])
                             else:
                                 current_player = "b" if current_player == "w" else "w"
-                                board_flipped = (current_player == "b")
+                                #board_flipped = (current_player == "b")
                                 king_in_check = is_in_check(board, current_player) if not game_over else False
                                 if king_in_check:
                                     king_in_check_square = find_king(board, current_player)
