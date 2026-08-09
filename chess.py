@@ -174,15 +174,9 @@ def make_move(board, start, end, promote_to=None):
     board[er][ec] = piece
     board[sr][sc] = None
     if piece[1] == "P" and (er == 0 or er == 7):
-        if promote_to is None:
-            while True:
-                promotion = input("Promote pawn to (Q, R, B, N): ").upper()
-                if promotion in ["Q", "R", "B", "N"]:
-                    promote_to = promotion
-                    break
-                else:
-                    print("Invalid promotion choice. Please choose Q, R, B, or N.")
-        board[er][ec] = piece[0] + promote_to
+
+        chosen = promote_to if promote_to in ("Q", "R", "B", "N") else "Q"
+        board[er][ec] = piece[0] + chosen
 
 def find_king(board, color):
     for row in range(8):
