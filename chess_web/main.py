@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from chess_ai import get_groq_move
 import os
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()  # reads .env and puts its values into os.environ
@@ -195,8 +197,9 @@ async def ai_move_endpoint():
     last_move = GAME_STATE["last_move"]
     has_moved = GAME_STATE["has_moved"]
     move_history = GAME_STATE["move_history"]
-
-    ai_move = await get_groq_move(board, current_player, last_move, move_history, GROQ_API_KEY, has_moved)
+    loop=asyncio.get_event_loop()
+    ai_move = await loop.run_in_executor(
+        None,get_groq_move,board, current_player, last_move, move_history, GROQ_API_KEY, has_moved)
 
     if ai_move is None:
         return serialize_game_state(GAME_STATE)

@@ -18,9 +18,9 @@ def get_all_legal_moves_for_player(board, color, last_move, has_moved):
                             legal_moves.append((start, end))
     return legal_moves
 
-def get_groq_move(board, color, last_move, history, api_key):
+def get_groq_move(board, color, last_move, history, api_key,has_moved):
     client = Groq(api_key=api_key)
-    legal_moves = get_all_legal_moves_for_player(board, color, last_move, {})
+    legal_moves = get_all_legal_moves_for_player(board, color, last_move, has_moved)
     if not legal_moves:
         return None
 
