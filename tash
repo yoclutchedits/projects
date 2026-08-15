@@ -1,0 +1,40 @@
+[1mdiff --git a/chess_web/main.py b/chess_web/main.py[m
+[1mindex 0bb0ae6..bd52633 100644[m
+[1m--- a/chess_web/main.py[m
+[1m+++ b/chess_web/main.py[m
+[36m@@ -65,7 +65,7 @@[m [mdef new_game_state():[m
+         "promotion_pending": None,[m
+     }[m
+ [m
+[31m-def attempt_make_move(game_state,end,start, promote_to=None):[m
+[32m+[m[32mdef attempt_make_move(game_state,start,end, promote_to=None):[m
+     if game_state["game_over"]:[m
+         return {"success": False, "reason": "game_over", "message": "the game is over"}[m
+     sr,sc = start[m
+[36m@@ -203,7 +203,7 @@[m [masync def make_move_endpoint(move: MoveRequest):[m
+     start = (move.from_row, move.from_col)[m
+     end = (move.to_row, move.to_col)[m
+     async with move_lock:[m
+[31m-        result = attempt_make_move(GAME_STATE, end, start)[m
+[32m+[m[32m        result = attempt_make_move(GAME_STATE, start , end)[m
+     return result[m
+ @app.post("/api/ai-move")[m
+ @limiter.limit("10/minute")[m
+[36m@@ -215,7 +215,7 @@[m [masync def ai_move_endpoint(request: Request):[m
+     move_history = GAME_STATE["move_history"][m
+     move_count_before = len(GAME_STATE["move_history"])[m
+ [m
+[31m-    loop = asyncio.get_event_loop()[m
+[32m+[m[32m    loop = asyncio.get_running_loop()[m
+     ai_move = await loop.run_in_executor([m
+         None, get_groq_move, board, current_player, last_move, move_history, GROQ_API_KEY, has_moved[m
+     )[m
+[36m@@ -227,7 +227,7 @@[m [masync def ai_move_endpoint(request: Request):[m
+             return {"success": False, "reason": "board_changed", "message": "Board changed while AI was thinking."}[m
+ [m
+         start, end = ai_move[m
+[31m-        return attempt_make_move(GAME_STATE, end, start)[m
+[32m+[m[32m        return attempt_make_move(GAME_STATE, start , end)[m
+ @app.exception_handler(Exception)[m
+ async def global_exception_handler(request: Request, exc: Exception):[m
+     print(f"Unhandled exception: {exc}")  # so you still see it in your terminal while developing[m

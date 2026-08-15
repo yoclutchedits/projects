@@ -65,7 +65,7 @@ def new_game_state():
         "promotion_pending": None,
     }
 
-def attempt_make_move(game_state,end,start, promote_to=None):
+def attempt_make_move(game_state,start,end, promote_to=None):
     if game_state["game_over"]:
         return {"success": False, "reason": "game_over", "message": "the game is over"}
     sr,sc = start
@@ -203,7 +203,7 @@ async def make_move_endpoint(move: MoveRequest):
     start = (move.from_row, move.from_col)
     end = (move.to_row, move.to_col)
     async with move_lock:
-        result = attempt_make_move(GAME_STATE, end, start)
+        result = attempt_make_move(GAME_STATE, start, end)
     return result
 @app.post("/api/ai-move")
 @limiter.limit("10/minute")
@@ -215,7 +215,7 @@ async def ai_move_endpoint(request: Request):
     move_history = GAME_STATE["move_history"]
     move_count_before = len(GAME_STATE["move_history"])
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     ai_move = await loop.run_in_executor(
         None, get_groq_move, board, current_player, last_move, move_history, GROQ_API_KEY, has_moved
     )
@@ -227,7 +227,7 @@ async def ai_move_endpoint(request: Request):
             return {"success": False, "reason": "board_changed", "message": "Board changed while AI was thinking."}
 
         start, end = ai_move
-        return attempt_make_move(GAME_STATE, end, start)
+        return attempt_make_move(GAME_STATE, start, end)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"Unhandled exception: {exc}")  # so you still see it in your terminal while developing
