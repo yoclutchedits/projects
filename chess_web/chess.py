@@ -334,6 +334,8 @@ def is_castling_legal(board, color, side, has_moved):
     if side == "kingside":
         if has_moved.get((color, "K"), True) or has_moved.get((color, "R", "kingside"), True):
             return False # King or rook has moved
+        if (board[king_row][7]) != color + "R":
+            return False
         if board[king_row][5] is not None or board[king_row][6] is not None:
             return False # Squares between king and rook are not empty
         if is_in_check(board, color):
@@ -346,6 +348,8 @@ def is_castling_legal(board, color, side, has_moved):
     elif side == "queenside": 
         if has_moved.get((color, "K"), True) or has_moved.get((color, "R", "queenside"), True):
             return False # King or rook has moved
+        if (board[king_row][0]) != color + "R":
+            return False
         if board[king_row][1] is not None or board[king_row][2] is not None or board[king_row][3] is not None:
             return False # Squares between king and rook are not empty
         if is_in_check(board, color):

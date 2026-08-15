@@ -1,8 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel ,Field
+from chess_ai import get_groq_move
 import os
+import asyncio
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 
 load_dotenv()  # reads .env and puts its values into os.environ
 
@@ -15,7 +22,9 @@ from chess import (
 )
 
 app = FastAPI()
-
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,14 +33,14 @@ app.add_middleware(
 )
 
 class MoveRequest(BaseModel):
-    from_row: int
-    from_col: int
-    to_row: int
-    to_col: int
+    from_row: int = Field(ge=0, le=7)
+    from_col: int = Field(ge=0, le=7)
+    to_row: int = Field(ge=0, le=7)
+    to_col: int = Field(ge=0, le=7)
 
 class SquareRequest(BaseModel):
-    row: int
-    col: int
+    row: int = Field(ge=0, le=7)
+    col: int = Field(ge=0, le=7)
 
 def new_game_state():
     board = create_board()
@@ -56,9 +65,77 @@ def new_game_state():
         "promotion_pending": None,
     }
 
+def attempt_make_move(game_state,end,start, promote_to=None):
+    if game_state["game_over"]:
+        return {"success": False, "reason": "game_over", "message": "the game is over"}
+    sr,sc = start
+    piece = game_state["board"][sr][sc]
+    if piece is None:
+        return {"success": False, "reason": "illegal_move", "message": "please select a piece"}
+    piece_color = piece[0]
+    if piece_color != game_state["current_player"]:
+        return {"success": False, "reason": "wrong_turn", "message": "it is not your turn"}
+    if end == (start[0], start[1] + 2) and piece[1] == "K":
+        is_legal = is_castling_legal(game_state["board"], piece_color, "kingside", game_state["has_moved"])
+    elif end == (start[0], start[1] - 2) and piece[1] == "K":
+        is_legal = is_castling_legal(game_state["board"], piece_color, "queenside", game_state["has_moved"])
+    else:
+        is_legal = is_move_safe(game_state["board"], start, end, piece_color) or is_en_passant_safe(game_state["board"], start, end,game_state["last_move"], piece_color)
+    if not is_legal:
+        return {"success": False, "reason": "illegal_move", "message": "that move is not legal"}
+    is_ep = (
+        piece is not None
+        and piece[1] == "P"
+        and is_en_passant_safe(game_state["board"], start, end, game_state["last_move"], piece_color)
+    )
+    if is_ep:
+        captured=game_state["board"][sr][end[1]]
+    else:
+        captured=game_state["board"][end[0]][end[1]]
+    if end == (start[0], start[1] + 2) and piece[1] == "K":
+        castle_side = "kingside"
+    elif end == (start[0], start[1] - 2) and piece[1] == "K":
+        castle_side = "queenside"
+    else:
+        castle_side = None
+    if castle_side is not None:
+        make_castle(game_state["board"], piece_color, castle_side)
+    elif is_ep:
+        make_en_passant(game_state["board"], start, end)
+    else:
+        chosen = promote_to if promote_to in ("Q", "R", "B", "N") else "Q"
+        make_move(game_state["board"], start, end, chosen)
+    if piece[1] == "K":
+        game_state["has_moved"][(piece_color, "K")] = True
+    elif piece[1] == "R":
+        if sc == 0:
+            game_state["has_moved"][(piece_color, "R", "queenside")] = True
+        elif sc == 7:
+            game_state["has_moved"][(piece_color, "R", "kingside")] = True
+    if captured:
+        game_state["captured_pieces"].append(captured)
+    game_state["move_history"].append(f"{piece}: {start} -> {end}")
+    new_last_move = (start, end, piece)
+    game_state["last_move"] = new_last_move
+    next_player = "b" if piece_color == "w" else "w"
+    game_state["current_player"] = next_player
+
+    if is_checkmate(game_state["board"], next_player, new_last_move):
+        game_state["status_message"] = "Checkmate!"
+        game_state["game_over"] = True
+    elif is_insufficient_material(game_state["board"]):
+        game_state["status_message"] = "Draw — insufficient material!"
+        game_state["game_over"] = True
+    elif is_stalemate(game_state["board"], next_player, new_last_move):
+        game_state["status_message"] = "Stalemate — it's a draw!"
+        game_state["game_over"] = True
+    elif is_in_check(game_state["board"], next_player):
+        game_state["status_message"] = f"{'Black' if next_player == 'b' else 'White'} king is in check!"
+    return {"success": True, "game_state": serialize_game_state(game_state)}
 
 # Single in-memory game — one game at a time, matches the original desktop app's design.
 GAME_STATE = new_game_state()
+move_lock = asyncio.Lock()
 
 def serialize_has_moved(has_moved):
     result = {}
@@ -72,69 +149,6 @@ def serialize_has_moved(has_moved):
             string_key = color + "_rook_" + side 
         result[string_key] = value
     return result
-
-def execute_move(start, end):
-    board = GAME_STATE["board"]
-    current_player = GAME_STATE["current_player"]
-    last_move = GAME_STATE["last_move"]
-    has_moved = GAME_STATE["has_moved"]
-
-    sr, sc = start
-    moving_piece = board[sr][sc]
-
-    is_ep = (
-        moving_piece is not None
-        and moving_piece[1] == "P"
-        and is_en_passant_safe(board, start, end, last_move, current_player)
-    )
-
-    castle_side = None
-    if moving_piece and moving_piece[1] == "K":
-        if end == (start[0], start[1] + 2):
-            castle_side = "kingside"
-        elif end == (start[0], start[1] - 2):
-            castle_side = "queenside"
-
-    was_capture = board[end[0]][end[1]] is not None or is_ep
-    captured = board[end[0]][end[1]] if not is_ep else board[sr][end[1]]
-
-    if castle_side is not None:
-        make_castle(board, current_player, castle_side)
-    elif is_ep:
-        make_en_passant(board, start, end)
-    else:
-        make_move(board, start, end, promote_to="Q")
-
-    if moving_piece[1] == "K":
-        has_moved[(current_player, "K")] = True
-    elif moving_piece[1] == "R":
-        if sc == 0:
-            has_moved[(current_player, "R", "queenside")] = True
-        elif sc == 7:
-            has_moved[(current_player, "R", "kingside")] = True
-
-    if was_capture and captured:
-        GAME_STATE["captured_pieces"].append(captured)
-
-    GAME_STATE["move_history"].append(f"{moving_piece}: {start} -> {end}")
-    new_last_move = (start, end, moving_piece)
-    GAME_STATE["last_move"] = new_last_move
-    next_player = "b" if current_player == "w" else "w"
-    GAME_STATE["current_player"] = next_player
-
-    if is_checkmate(board, next_player, new_last_move):
-        GAME_STATE["status_message"] = "Checkmate!"
-        GAME_STATE["game_over"] = True
-    elif is_insufficient_material(board):
-        GAME_STATE["status_message"] = "Draw — insufficient material!"
-        GAME_STATE["game_over"] = True
-    elif is_stalemate(board, next_player, new_last_move):
-        GAME_STATE["status_message"] = "Stalemate — it's a draw!"
-        GAME_STATE["game_over"] = True
-    elif is_in_check(board, next_player):
-        GAME_STATE["status_message"] = f"{'Black' if next_player == 'b' else 'White'} king is in check!"
-
-    return serialize_game_state(GAME_STATE)
 
 def serialize_game_state(state):
     return {
@@ -166,7 +180,8 @@ def get_valid_moves_endpoint(square: SquareRequest):
 
     if moving_piece is None:
         return {"valid_moves": valid_moves}
-
+    if moving_piece[0] != current_player:
+        return {"valid_moves": []}
     for r in range(8):
         for c in range(8):
             target = (r, c)
@@ -184,22 +199,39 @@ def get_valid_moves_endpoint(square: SquareRequest):
 
     return {"valid_moves": valid_moves}
 @app.post("/api/move")
-def make_move_endpoint(move: MoveRequest):
+async def make_move_endpoint(move: MoveRequest):
     start = (move.from_row, move.from_col)
     end = (move.to_row, move.to_col)
-    return execute_move(start, end)
+    async with move_lock:
+        result = attempt_make_move(GAME_STATE, end, start)
+    return result
 @app.post("/api/ai-move")
-async def ai_move_endpoint():
+@limiter.limit("10/minute")
+async def ai_move_endpoint(request: Request):
     board = GAME_STATE["board"]
     current_player = GAME_STATE["current_player"]
     last_move = GAME_STATE["last_move"]
     has_moved = GAME_STATE["has_moved"]
     move_history = GAME_STATE["move_history"]
+    move_count_before = len(GAME_STATE["move_history"])
 
-    ai_move = await get_groq_move(board, current_player, last_move, move_history, GROQ_API_KEY, has_moved)
+    loop = asyncio.get_event_loop()
+    ai_move = await loop.run_in_executor(
+        None, get_groq_move, board, current_player, last_move, move_history, GROQ_API_KEY, has_moved
+    )
 
     if ai_move is None:
-        return serialize_game_state(GAME_STATE)
+        return {"success": True, "game_state": serialize_game_state(GAME_STATE)}
+    async with move_lock:
+        if len(GAME_STATE["move_history"]) != move_count_before:
+            return {"success": False, "reason": "board_changed", "message": "Board changed while AI was thinking."}
 
-    start, end = ai_move
-    return execute_move(start, end)
+        start, end = ai_move
+        return attempt_make_move(GAME_STATE, end, start)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"Unhandled exception: {exc}")  # so you still see it in your terminal while developing
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "reason": "server_error", "message": "Something went wrong on the server."}
+    )

@@ -9,6 +9,13 @@ def get_all_legal_moves_for_player(board, color, last_move, has_moved):
             piece = board[sr][sc]
             if piece and piece[0] == color:
                 start = (sr, sc)
+                if piece[1] == "K":
+                    if is_castling_legal(board, color, "kingside", has_moved):
+                        end = (sr, sc + 2)
+                        legal_moves.append((start,end))
+                    if is_castling_legal(board, color, "queenside", has_moved):
+                        end = (sr, sc -2 )
+                        legal_moves.append((start,end))
                 for er in range(8):
                     for ec in range(8):
                         end = (er, ec)
@@ -18,9 +25,9 @@ def get_all_legal_moves_for_player(board, color, last_move, has_moved):
                             legal_moves.append((start, end))
     return legal_moves
 
-def get_groq_move(board, color, last_move, history, api_key):
-    client = Groq(api_key=api_key)
-    legal_moves = get_all_legal_moves_for_player(board, color, last_move, {})
+def get_groq_move(board, color, last_move, history, api_key,has_moved):
+    client = Groq(api_key=api_key,timeout=20.0)
+    legal_moves = get_all_legal_moves_for_player(board, color, last_move, has_moved)
     if not legal_moves:
         return None
 
@@ -28,7 +35,7 @@ def get_groq_move(board, color, last_move, history, api_key):
     board_str = "\n".join([" ".join([cell if cell else ".." for cell in row]) for row in board])
     recent_history = "\n".join(history[-10:]) if history else "Game started."
 
-    prompt = f"""You are playing chess as Black ('b').
+    prompt = f"""You are playing chess as {"white" if color=="w" else "black"}.
 
 Recent move history:
 {recent_history}
