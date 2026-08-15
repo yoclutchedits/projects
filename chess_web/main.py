@@ -1,10 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel ,Field
 from chess_ai import get_groq_move
 import os
 import asyncio
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 
 load_dotenv()  # reads .env and puts its values into os.environ
 
@@ -17,7 +22,9 @@ from chess import (
 )
 
 app = FastAPI()
-
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,14 +33,14 @@ app.add_middleware(
 )
 
 class MoveRequest(BaseModel):
-    from_row: int
-    from_col: int
-    to_row: int
-    to_col: int
+    from_row: int = Field(ge=0, le=7)
+    from_col: int = Field(ge=0, le=7)
+    to_row: int = Field(ge=0, le=7)
+    to_col: int = Field(ge=0, le=7)
 
 class SquareRequest(BaseModel):
-    row: int
-    col: int
+    row: int = Field(ge=0, le=7)
+    col: int = Field(ge=0, le=7)
 
 def new_game_state():
     board = create_board()
@@ -124,10 +131,11 @@ def attempt_make_move(game_state,end,start, promote_to=None):
         game_state["game_over"] = True
     elif is_in_check(game_state["board"], next_player):
         game_state["status_message"] = f"{'Black' if next_player == 'b' else 'White'} king is in check!"
-    return {"success": True, "game_state": game_state}
+    return {"success": True, "game_state": serialize_game_state(game_state)}
 
 # Single in-memory game — one game at a time, matches the original desktop app's design.
 GAME_STATE = new_game_state()
+move_lock = asyncio.Lock()
 
 def serialize_has_moved(has_moved):
     result = {}
@@ -172,7 +180,8 @@ def get_valid_moves_endpoint(square: SquareRequest):
 
     if moving_piece is None:
         return {"valid_moves": valid_moves}
-
+    if moving_piece[0] != current_player:
+        return {"valid_moves": []}
     for r in range(8):
         for c in range(8):
             target = (r, c)
@@ -190,13 +199,15 @@ def get_valid_moves_endpoint(square: SquareRequest):
 
     return {"valid_moves": valid_moves}
 @app.post("/api/move")
-def make_move_endpoint(move: MoveRequest):
+async def make_move_endpoint(move: MoveRequest):
     start = (move.from_row, move.from_col)
     end = (move.to_row, move.to_col)
-    result = attempt_make_move(GAME_STATE, end, start)
+    async with move_lock:
+        result = attempt_make_move(GAME_STATE, end, start)
     return result
 @app.post("/api/ai-move")
-async def ai_move_endpoint():
+@limiter.limit("10/minute")
+async def ai_move_endpoint(request: Request):
     board = GAME_STATE["board"]
     current_player = GAME_STATE["current_player"]
     last_move = GAME_STATE["last_move"]
@@ -210,10 +221,17 @@ async def ai_move_endpoint():
     )
 
     if ai_move is None:
-        return {"success": True, "game_state": GAME_STATE}
+        return {"success": True, "game_state": serialize_game_state(GAME_STATE)}
+    async with move_lock:
+        if len(GAME_STATE["move_history"]) != move_count_before:
+            return {"success": False, "reason": "board_changed", "message": "Board changed while AI was thinking."}
 
-    if len(GAME_STATE["move_history"]) != move_count_before:
-        return {"success": False, "reason": "board_changed", "message": "Board changed while AI was thinking."}
-
-    start, end = ai_move
-    return attempt_make_move(GAME_STATE, end, start)
+        start, end = ai_move
+        return attempt_make_move(GAME_STATE, end, start)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"Unhandled exception: {exc}")  # so you still see it in your terminal while developing
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "reason": "server_error", "message": "Something went wrong on the server."}
+    )
