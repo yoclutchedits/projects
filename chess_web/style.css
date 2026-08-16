@@ -1,0 +1,30 @@
+
+body {
+    background-color: gainsboro;
+    /* margin: 0;
+    justify-content: center;
+    display: flex;
+    align-items: center;
+    height: 100vh; */
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(8,60px);
+    grid-template-rows: repeat(8, 60px);
+    justify-content: center;
+    
+    margin: auto;
+    padding-top: 100px;
+}
+.grid .white {
+    background-color: white;
+    border: 1px solid #ccc;
+}
+.grid .black {
+    background-color: black;
+    border: 1px solid #ccc;
+}
+title {
+    align-items: center;
+    position: relative;
+}
