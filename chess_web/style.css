@@ -1,11 +1,11 @@
 
 body {
     background-color: gainsboro;
-    /* margin: 0;
+    margin: 0;
     justify-content: center;
     display: flex;
     align-items: center;
-    height: 100vh; */
+    height: 100vh;
 }
 .grid {
     display: grid;
@@ -24,7 +24,4 @@ body {
     background-color: black;
     border: 1px solid #ccc;
 }
-title {
-    align-items: center;
-    position: relative;
-}
+
