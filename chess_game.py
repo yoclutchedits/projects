@@ -126,9 +126,10 @@ def get_groq_move(board, color, last_move, history):
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
+            reasoning_effort="low",
         )
         move_text = response.choices[0].message.content.strip()
         start_part, end_part = move_text.split("->")
@@ -482,6 +483,10 @@ while running:
                 board_x = x - BOARD_ORIGIN_X
                 board_y = y - BOARD_ORIGIN_Y
                 if not (0 <= board_x < BOARD_SIZE and 0 <= board_y < BOARD_SIZE):
+                    continue
+                if ai_mode and (current_player == "b" or ai_thinking):
+                    error_message="Ai is thinking wait"
+                    play_error_sfx = True
                     continue
                 col = board_x // SQUARE_SIZE
                 row = board_y // SQUARE_SIZE
