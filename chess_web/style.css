@@ -17,11 +17,16 @@ body {
     padding-top: 100px;
 }
 .grid .white {
-    background-color: white;
-    border: 1px solid #ccc;
+    background-color: #f0d9b5;
+    border: 0px solid #ccc;
 }
 .grid .black {
-    background-color: black;
-    border: 1px solid #ccc;
+    background-color: #b58863;
+    border: 0px solid #ccc;
 }
 
+.grid > div {
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
