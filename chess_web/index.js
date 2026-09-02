@@ -41,8 +41,35 @@ function renderBoard(board) {
 async function onSquareClick(row, col) {
     const piece = currentBoard[row][col];
     const belongsToCurrentPlayer = piece && piece[0] === currentPlayer;
+    
+    const isValidTarget = validMoves.some(([r, c]) => r === row && c === col);
 
-    if (!selectedSquare && belongsToCurrentPlayer) {
+    if (selectedSquare && isValidTarget) {
+        // NEW: Case 0 — make the move
+        const response = await fetch("http://127.0.0.1:8000/api/move", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                from_row: selectedSquare.row,
+                from_col: selectedSquare.col,
+                to_row: row,
+                to_col: col,
+            }),
+        });
+        const data = await response.json();
+        if (data.success) {
+                currentBoard = data.game_state.board;
+                currentPlayer = data.game_state.current_player;
+                selectedSquare = null;
+                validMoves = [];
+                renderBoard(currentBoard);
+            } else {
+                selectedSquare = null;
+                validMoves = [];
+                renderBoard(currentBoard);
+            }
+    }
+    else if (!selectedSquare && belongsToCurrentPlayer) {
         // Case 1: select this square, then ask the server for valid moves
         selectedSquare = { row, col };
         const response = await fetch("http://127.0.0.1:8000/api/valid-moves", {
