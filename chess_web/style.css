@@ -30,11 +30,21 @@ body {
     background-repeat: no-repeat;
     background-position: center;
 }
-.grid .black.selected{
-    border: 5px solid yellow
+.grid .black.selected,
+.grid .white.selected {
+    position: relative;
 }
-.grid .white.selected{
-    border: 5px solid yellow
+.grid .black.selected::after,
+.grid .white.selected::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 5px solid yellow;
+    box-sizing: border-box;
 }
 .valid-move {
     position: relative;
@@ -49,4 +59,21 @@ body {
     background-color: rgba(0, 0, 0, 0.4);
     border-radius: 50%;
     transform: translate(-50%, -50%);
+}
+.grid .black.capture,
+.grid .white.capture{
+    position: relative;
+}
+.grid .black.capture::after,
+.grid .white.capture::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 3px solid red;
+    border-radius: 50%;
+    box-sizing: border-box;
 }

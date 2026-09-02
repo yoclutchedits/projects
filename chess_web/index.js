@@ -18,7 +18,23 @@ for (let row = 0; row < 8; row++) {
         gridEl.appendChild(square)
     }
 }
-function renderBoard(board) {
+
+function isCaptureSquare(row, col) {
+    if (!selectedSquare || !validMoves.some(([r, c]) => r === row && c === col)) return false;
+    const sourcePiece = currentBoard[selectedSquare.row][selectedSquare.col];
+    const targetPiece = currentBoard[row][col];
+    if (!sourcePiece) return false;
+
+    // Standard capture
+    if (targetPiece && targetPiece[0] !== sourcePiece[0]) return true;
+
+    // En Passant capture (Pawn moving diagonally onto an empty square)
+    if (sourcePiece[1] === "P" && selectedSquare.col !== col && !targetPiece) return true;
+
+    return false;
+}
+
+async function renderBoard(board) {
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
             const piece = board[row][col];
@@ -28,11 +44,14 @@ function renderBoard(board) {
             } else {
                 squareEl.style.backgroundImage = "";
             }
-            squareEl.classList.remove("selected", "valid-move");
+            squareEl.classList.remove("selected", "valid-move","capture");
             if (selectedSquare && selectedSquare.row === row && selectedSquare.col === col) {
                 squareEl.classList.add("selected");
             }
-            if (validMoves.some(([r, c]) => r === row && c === col)) {
+            if (isCaptureSquare(row, col)) {
+                squareEl.classList.add("capture");
+            }
+            else if (validMoves.some(([r, c]) => r === row && c === col)) {
                 squareEl.classList.add("valid-move");
             }
         }
@@ -71,7 +90,7 @@ async function onSquareClick(row, col) {
             await triggerAiMove();
         }
     }
-    else if (!selectedSquare && belongsToCurrentPlayer) {
+    else if ( belongsToCurrentPlayer) {
         // Case 1: select this square, then ask the server for valid moves
         selectedSquare = { row, col };
         const response = await fetch("http://127.0.0.1:8000/api/valid-moves", {
@@ -103,7 +122,6 @@ async function triggerAiMove() {
         renderBoard(currentBoard);
     }
 }
-
 async function loadBoard() {
 let response= await fetch("http://127.0.0.1:8000/api/board")
 const data = await response.json()
