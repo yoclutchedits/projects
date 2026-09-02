@@ -43,7 +43,6 @@ async function onSquareClick(row, col) {
     const belongsToCurrentPlayer = piece && piece[0] === currentPlayer;
     
     const isValidTarget = validMoves.some(([r, c]) => r === row && c === col);
-
     if (selectedSquare && isValidTarget) {
         // NEW: Case 0 — make the move
         const response = await fetch("http://127.0.0.1:8000/api/move", {
@@ -68,6 +67,9 @@ async function onSquareClick(row, col) {
                 validMoves = [];
                 renderBoard(currentBoard);
             }
+        if (currentPlayer === "b") {
+            await triggerAiMove();
+        }
     }
     else if (!selectedSquare && belongsToCurrentPlayer) {
         // Case 1: select this square, then ask the server for valid moves
@@ -82,6 +84,20 @@ async function onSquareClick(row, col) {
         renderBoard(currentBoard);
     } else {
         // Case 2: clear selection
+        selectedSquare = null;
+        validMoves = [];
+        renderBoard(currentBoard);
+    }
+}
+
+async function triggerAiMove() {
+    const response = await fetch("http://127.0.0.1:8000/api/ai-move", {
+        method: "POST",
+    });
+    const data = await response.json();
+    if (data.success) {
+        currentBoard = data.game_state.board;
+        currentPlayer = data.game_state.current_player;
         selectedSquare = null;
         validMoves = [];
         renderBoard(currentBoard);
