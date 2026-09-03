@@ -4,6 +4,7 @@ let selectedSquare = null;
 let validMoves = [];
 let currentBoard = null;
 let currentPlayer = null;
+let isBusy = false;
 for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
         const square = document.createElement("div")
@@ -34,7 +35,7 @@ function isCaptureSquare(row, col) {
     return false;
 }
 
-async function renderBoard(board) {
+function renderBoard(board) {
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
             const piece = board[row][col];
@@ -62,8 +63,13 @@ async function onSquareClick(row, col) {
     const belongsToCurrentPlayer = piece && piece[0] === currentPlayer;
     
     const isValidTarget = validMoves.some(([r, c]) => r === row && c === col);
+    if (isBusy) {
+        showError("Please wait for the current move to finish.");
+        return;
+    }
     if (selectedSquare && isValidTarget) {
         // NEW: Case 0 — make the move
+        isBusy = true;
         const response = await fetch("http://127.0.0.1:8000/api/move", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -76,19 +82,19 @@ async function onSquareClick(row, col) {
         });
         const data = await response.json();
         if (data.success) {
-                currentBoard = data.game_state.board;
-                currentPlayer = data.game_state.current_player;
-                selectedSquare = null;
-                validMoves = [];
-                renderBoard(currentBoard);
+                applyGameState(data.game_state);
+
             } else {
                 selectedSquare = null;
                 validMoves = [];
                 renderBoard(currentBoard);
+                showError(data.message)
+
             }
         if (currentPlayer === "b") {
             await triggerAiMove();
         }
+        isBusy = false;
     }
     else if ( belongsToCurrentPlayer) {
         // Case 1: select this square, then ask the server for valid moves
@@ -113,14 +119,42 @@ async function triggerAiMove() {
     const response = await fetch("http://127.0.0.1:8000/api/ai-move", {
         method: "POST",
     });
-    const data = await response.json();
-    if (data.success) {
-        currentBoard = data.game_state.board;
-        currentPlayer = data.game_state.current_player;
-        selectedSquare = null;
-        validMoves = [];
-        renderBoard(currentBoard);
+    if (response.status === 429) {
+        showError("AI is rate-limited — try again shortly.");
+        return;
     }
+    const data = await response.json();
+    
+    if (data.success) {
+        applyGameState(data.game_state);
+    }
+    else {
+        showError(data.message || "AI move failed.");
+    }
+}
+function showError(message) {
+    const errorBanner = document.getElementById("error-banner");
+    errorBanner.textContent = message;
+    errorBanner.classList.remove("hidden");
+    setTimeout(() => {
+        errorBanner.classList.add("hidden");
+    }, 3000);
+}
+function applyGameState(gameState) {
+    currentBoard = gameState.board;
+    currentPlayer = gameState.current_player;
+    selectedSquare = null;
+    validMoves = [];
+    renderBoard(currentBoard);
+
+    if (gameState.game_over) {
+        showGameOver(gameState.status_message);
+    }
+}
+function showGameOver(message) {
+    const gameOverBanner = document.getElementById("game-over-banner");
+    gameOverBanner.textContent = message;
+    gameOverBanner.classList.remove("hidden");
 }
 async function loadBoard() {
 let response= await fetch("http://127.0.0.1:8000/api/board")

@@ -1,4 +1,26 @@
-
+.hidden {
+    display: none;
+}
+#game-over-banner{
+    position: fixed;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    color: red;
+    padding: 10px 20px;
+    border-radius: 6px;
+}
+#error-banner {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    color: red;
+    padding: 10px 20px;
+    border-radius: 6px;
+}
 body {
     background-color: gainsboro;
     margin: 0;
