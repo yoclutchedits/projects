@@ -37,6 +37,7 @@ class MoveRequest(BaseModel):
     from_col: int = Field(ge=0, le=7)
     to_row: int = Field(ge=0, le=7)
     to_col: int = Field(ge=0, le=7)
+    promote_to: str | None = None
 
 class SquareRequest(BaseModel):
     row: int = Field(ge=0, le=7)
@@ -63,6 +64,8 @@ def new_game_state():
         "game_over": False,
         "status_message": "",
         "promotion_pending": None,
+        "in_check": False,
+        "in_check_color": None,
     }
 
 def attempt_make_move(game_state,start,end, promote_to=None):
@@ -119,7 +122,8 @@ def attempt_make_move(game_state,start,end, promote_to=None):
     game_state["last_move"] = new_last_move
     next_player = "b" if piece_color == "w" else "w"
     game_state["current_player"] = next_player
-
+    game_state["in_check"] = False
+    game_state["in_check_color"] = None
     if is_checkmate(game_state["board"], next_player, new_last_move):
         game_state["status_message"] = "Checkmate!"
         game_state["game_over"] = True
@@ -131,6 +135,8 @@ def attempt_make_move(game_state,start,end, promote_to=None):
         game_state["game_over"] = True
     elif is_in_check(game_state["board"], next_player):
         game_state["status_message"] = f"{'Black' if next_player == 'b' else 'White'} king is in check!"
+        game_state["in_check"] = True
+        game_state["in_check_color"] = next_player
     return {"success": True, "game_state": serialize_game_state(game_state)}
 
 # Single in-memory game — one game at a time, matches the original desktop app's design.
@@ -161,6 +167,8 @@ def serialize_game_state(state):
             "promotion_pending": state["promotion_pending"],
             "has_moved": serialize_has_moved(state["has_moved"]), 
             "last_move": state["last_move"],
+            "in_check": state["in_check"],
+            "in_check_color": state["in_check_color"],
         }
 @app.get("/api/board")
 def get_board():
@@ -203,7 +211,7 @@ async def make_move_endpoint(move: MoveRequest):
     start = (move.from_row, move.from_col)
     end = (move.to_row, move.to_col)
     async with move_lock:
-        result = attempt_make_move(GAME_STATE, start, end)
+        result = attempt_make_move(GAME_STATE, start, end,move.promote_to)
     return result
 @app.post("/api/ai-move")
 @limiter.limit("10/minute")
@@ -228,6 +236,11 @@ async def ai_move_endpoint(request: Request):
 
         start, end = ai_move
         return attempt_make_move(GAME_STATE, start, end)
+@app.post("/api/reset")
+def reset_game():
+    global GAME_STATE
+    GAME_STATE = new_game_state()
+    return {"success": True, "game_state": serialize_game_state(GAME_STATE)}
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"Unhandled exception: {exc}")  # so you still see it in your terminal while developing

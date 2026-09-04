@@ -1,26 +1,7 @@
 .hidden {
-    display: none;
+    display: none !important;
 }
-#game-over-banner{
-    position: fixed;
-    top: 50px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: white;
-    color: red;
-    padding: 10px 20px;
-    border-radius: 6px;
-}
-#error-banner {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: white;
-    color: red;
-    padding: 10px 20px;
-    border-radius: 6px;
-}
+
 body {
     background-color: gainsboro;
     margin: 0;
@@ -28,16 +9,25 @@ body {
     display: flex;
     align-items: center;
     height: 100vh;
+    font-family: Arial, sans-serif;
 }
+
+/* ===== Layout ===== */
+.game-container {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+
 .grid {
     display: grid;
-    grid-template-columns: repeat(8,60px);
+    grid-template-columns: repeat(8, 60px);
     grid-template-rows: repeat(8, 60px);
     justify-content: center;
-    
     margin: auto;
     padding-top: 100px;
 }
+
 .grid .white {
     background-color: #f0d9b5;
     border: 0px solid #ccc;
@@ -46,12 +36,13 @@ body {
     background-color: #b58863;
     border: 0px solid #ccc;
 }
-
 .grid > div {
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
 }
+
+/* ===== Selection / valid-move / capture highlights ===== */
 .grid .black.selected,
 .grid .white.selected {
     position: relative;
@@ -68,6 +59,7 @@ body {
     border: 5px solid yellow;
     box-sizing: border-box;
 }
+
 .valid-move {
     position: relative;
 }
@@ -82,8 +74,9 @@ body {
     border-radius: 50%;
     transform: translate(-50%, -50%);
 }
+
 .grid .black.capture,
-.grid .white.capture{
+.grid .white.capture {
     position: relative;
 }
 .grid .black.capture::after,
@@ -98,4 +91,210 @@ body {
     border: 3px solid red;
     border-radius: 50%;
     box-sizing: border-box;
+}
+.grid .white.check,
+.grid .black.check {
+    position: relative;
+}
+.grid .white.check::after,
+.grid .black.check::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 5px solid red;
+    box-sizing: border-box;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: #2b2b2b;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    color: #eee;
+}
+
+#turn-indicator {
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #444;
+}
+
+.captured-piece {
+    width: 24px;
+    height: 24px;
+}
+
+#captured-white, #captured-black {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    background-color: #3a3a3a;
+    border-radius: 6px;
+    padding: 8px;
+    min-height: 30px;
+}
+#captured-white::before {
+    content: "Captured by Black";
+    display: block;
+    width: 100%;
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+#captured-black::before {
+    content: "Captured by White";
+    display: block;
+    width: 100%;
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+#move-history {
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 6px;
+    padding: 10px;
+    background-color: #3a3a3a;
+    color: #ddd;
+    font-family: monospace;
+    font-size: 13px;
+}
+#move-history div {
+    padding: 2px 0;
+    border-bottom: 1px solid #4a4a4a;
+}
+
+/* ===== Buttons ===== */
+#new-game-btn, #play-again-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.05s ease;
+}
+#new-game-btn:hover, #play-again-btn:hover {
+    background-color: #43a047;
+}
+#new-game-btn:active, #play-again-btn:active {
+    transform: scale(0.97);
+}
+#new-game-btn {
+    width: 100%;
+}
+#confirm-reset-btn , #cancel-reset-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    flex-direction: column;
+    gap: 15px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.05s ease;
+}
+#confirm-reset-btn:hover, #cancel-reset-btn:hover {
+    background-color: #e53935;
+}
+#confirm-reset-btn:active, #cancel-reset-btn:active {
+    transform: scale(0.97);
+}
+.promotion-btn{
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    flex-direction: column;
+    gap: 15px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.05s ease;
+}
+.promotion-btn:hover {
+    background-color: #e53935;
+}
+.promotion-btn:active {
+    transform: scale(0.97);
+}
+/* ===== Banners ===== */
+#error-banner {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    color: red;
+    padding: 10px 20px;
+    border-radius: 6px;
+}
+
+#game-over-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    color: #222;
+    padding: 24px 32px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+#reset-confirm-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    color: #222;
+    padding: 24px 32px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+#promotion-picker {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    color: #222;
+    padding: 24px 32px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }

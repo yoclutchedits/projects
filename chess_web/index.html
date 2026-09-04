@@ -7,10 +7,37 @@
 </head>
 <link rel="stylesheet" href="style.css">   
 <body>
-    <div class="grid">
+    <div id="error-banner" class="hidden"></div>
+    <div class="game-container">
+        <div class="grid"></div>
+        <div class="sidebar">
+            <button id="new-game-btn" onclick="showResetConfirm()">New Game</button>
+            <div id="turn-indicator"></div>
+            <div id="captured-white"></div>
+            <div id="captured-black"></div>
+            <div id="move-history"></div>
+        </div>
+    </div>
+    <div id="game-over-banner" class="hidden">
+        <p id="game-over-message"></p>
+        <button id="play-again-btn" onclick="resetGame()">Play Again</button>
+    </div>
+    <div id="reset-confirm-banner" class="hidden">
+    <p>Are you sure you want to start a new game?</p>
+    <div class="button-row">
+        <button id="confirm-reset-btn" onclick="resetGame(); hideResetConfirm()">Yes, New Game</button>
+        <button id="cancel-reset-btn" onclick="hideResetConfirm()">Cancel</button>
+    </div>
+    </div>
+    <div id="promotion-picker" class="hidden">
+        <p>Promote pawn to:</p>
+        <div class="button-row">
+            <button class="promotion-btn" onclick="choosePromotion('Q')">Queen</button>
+            <button class="promotion-btn" onclick="choosePromotion('R')">Rook</button>
+            <button class="promotion-btn" onclick="choosePromotion('B')">Bishop</button>
+            <button class="promotion-btn" onclick="choosePromotion('N')">Knight</button>
+        </div>
     </div>
     <script src="index.js"></script>
-    <div id="error-banner" class="hidden"></div>
-    <div id="game-over-banner" class="hidden"></div>
 </body>
 </html>
