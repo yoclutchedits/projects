@@ -4,3 +4,5 @@ __pycache__/
 .env
 bank.db
 *.db
+testing.py
+.gitignoreS

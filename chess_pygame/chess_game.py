@@ -63,19 +63,19 @@ FONT = pygame.font.SysFont("arial", 24)
 
 clock = pygame.time.Clock()
 
-capture_sfx=pygame.mixer.Sound("projects/sfx/Capture.mp3")
+capture_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Capture.mp3")
 
-check_sfx=pygame.mixer.Sound("projects/sfx/Check.mp3")
+check_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Check.mp3")
 
-checkmate_sfx=pygame.mixer.Sound("projects/sfx/Checkmate.mp3")
+checkmate_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Checkmate.mp3")
 
-move_sfx=pygame.mixer.Sound("projects/sfx/Move.mp3")
+move_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Move.mp3")
 
-defeat_sfx=pygame.mixer.Sound("projects/sfx/Defeat.mp3")
+defeat_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Defeat.mp3")
 
-victory_sfx=pygame.mixer.Sound("projects/sfx/Victory.mp3")
+victory_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Victory.mp3")
 
-error_sfx=pygame.mixer.Sound("projects/sfx/Error.mp3")
+error_sfx=pygame.mixer.Sound("projects/chess_pygame/sfx/Error.mp3")
 
 PIECE_IMAGES = {}
 
@@ -255,7 +255,7 @@ def load_piece_images():
     piece_codes = ["wK", "wQ", "wR", "wB", "wN", "wP",
                 "bK", "bQ", "bR", "bB", "bN", "bP"]
     for code in piece_codes:
-        image = pygame.image.load(f"projects/pieces/{code}.png")
+        image = pygame.image.load(f"projects/chess_pygame/pieces/{code}.png")
         image = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
         PIECE_IMAGES[code] = image
 
