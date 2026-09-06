@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request ,Header
 from sqlalchemy.orm import Session
 from app.utils.audit import log_action
 from app.database import get_db
@@ -10,8 +10,10 @@ from app.utils.account_utils import generate_account_number
 from app.routers.auth import get_current_user
 from app.utils.scheduled_jobs import apply_monthly_interest
 from app.utils.scheduled_jobs import process_due_payments
+import os
 
 
+ADMIN_JOB_SECRET = os.getenv("ADMIN_JOB_SECRET")
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -76,11 +78,16 @@ def list_my_accounts(
     return accounts
 
 @router.post("/run-interest-job")
-def run_interest_job(db: Session = Depends(get_db)):
+def run_interest_job(db: Session = Depends(get_db), x_admin_secret: str = Header(None)):
+    if x_admin_secret !=ADMIN_JOB_SECRET:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     results = apply_monthly_interest(db)
     return {"detail": "Interest job completed", "results": results}
 
+
 @router.post("/run-scheduled-payments-job")
-def run_scheduled_payments_job(db: Session = Depends(get_db)):
+def run_scheduled_payments_job(db: Session = Depends(get_db), x_admin_secret: str = Header(None)):
+    if x_admin_secret !=ADMIN_JOB_SECRET:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     results = process_due_payments(db)
     return {"detail": "Scheduled payments job completed", "results": results}

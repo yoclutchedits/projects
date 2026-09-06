@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserOut
 from app.security import hash_password
+from app.limiter import limiter
 from fastapi.security import OAuth2PasswordBearer
 from app.security import decode_access_token
 from app.models.token_blocklist import TokenBlocklist
@@ -59,6 +60,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 def login(user_in: UserLogin, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_in.email).first()
 
