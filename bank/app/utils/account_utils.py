@@ -8,3 +8,5 @@ def generate_account_number(db: Session) -> str:
         existing = db.query(Account).filter(Account.account_number == candidate).first()
         if not existing:
             return candidate
+def generate_verification_code() -> str:
+    return str(random.randint(100000, 999999))

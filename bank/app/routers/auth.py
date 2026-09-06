@@ -13,7 +13,12 @@ from app.models.token_blocklist import TokenBlocklist
 from datetime import datetime, timezone
 from fastapi import Request
 from app.utils.audit import log_action
-
+from datetime import timedelta
+from app.models.verification_code import VerificationCode
+from app.utils.account_utils import generate_verification_code
+from app.utils.email import send_verification_email
+from app.schemas.user import UserCreate, UserOut, UserLogin 
+from app.schemas.user import VerifyEmailRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,11 +35,25 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         email=user_in.email,
         hashed_password=hashed_pw,
         full_name=user_in.full_name,
+        is_active=False,
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    code=generate_verification_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    verification = VerificationCode(
+        user_id=new_user.id,
+        code=code,
+        expires_at=expires_at,
+    )
+    db.add(verification)
+    db.commit()
+
+    send_verification_email(new_user.email, code)
+
 
     return new_user
 
@@ -45,35 +64,33 @@ def login(user_in: UserLogin, request: Request, db: Session = Depends(get_db)):
 
     if not user or not verify_password(user_in.password, user.hashed_password):
         log_action(
-            db=db,
-            request=request,
-            action="failed_login",
-            entity_type="user",
-            entity_id=user_in.email,
-            user_id=user.id if user else None,   
+            db=db, request=request, action="failed_login", entity_type="user",
+            entity_id=user_in.email, user_id=user.id if user else None,
         )
-        db.commit()  
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-        )
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email before logging in")
+    code = generate_verification_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)  # hint: 2FA codes should be SHORT-lived -- much shorter than the 10-min signup code, since this happens every login
 
-    # Log the SUCCESSFUL attempt.
-    log_action(
-        db=db,
-        request=request,
-        action="successful_login",
-        entity_type="user",
-        entity_id=str(user.id),
+    two_fa_code = VerificationCode(
         user_id=user.id,
+        code=code,
+        expires_at=expires_at,
     )
+    db.add(two_fa_code)
+    db.commit()
 
-    access_token = create_access_token(data={"sub": str(user.id)})
-    db.commit()   
+    send_verification_email(user.email, code)
 
-    return {"access_token": access_token, "token_type": "bearer"}
-
+    log_action(
+        db=db, request=request, action="password_verified", entity_type="user",
+        entity_id=str(user.id), user_id=user.id,
+    )
+    db.commit()
+    return {"detail": "Password correct. Check your email for a 2FA code."}
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
@@ -93,6 +110,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
 
     user_id: str = payload.get("sub")
+
     if user_id is None:
         raise credentials_exception
     user = db.query(User).filter(User.id == int(user_id)).first()
@@ -113,10 +131,6 @@ def logout(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     jti = payload.get("jti")
     exp = payload.get("exp")
 
-    # Hint: exp comes back from the JWT payload as a raw number
-    # (seconds since 1970 — a "unix timestamp"), not a datetime object.
-    # We need to convert it into a real datetime to store in our
-    # DateTime column. fromtimestamp(..., tz=timezone.utc) does this.
     expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
 
     blocked = TokenBlocklist(jti=jti, expires_at=expires_at)
@@ -124,3 +138,58 @@ def logout(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     db.commit()
 
     return {"detail": "Successfully logged out"}
+
+@router.post("/verify-email")
+def verify_email(verify_in: VerifyEmailRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == verify_in.email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+
+    code_entry = db.query(VerificationCode).filter(
+        VerificationCode.user_id == user.id,
+        VerificationCode.code == verify_in.code,
+        VerificationCode.used == False,
+    ).first()
+
+    if not code_entry:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+
+    if code_entry.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Code expired")
+
+    code_entry.used = True
+    user.is_active = True
+    db.commit()
+
+    return {"detail": "Email verified successfully"}
+
+@router.post("/login/verify-2fa")
+def verify_2fa(verify_in: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == verify_in.email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+
+    code_entry = db.query(VerificationCode).filter(
+        VerificationCode.user_id == user.id,
+        VerificationCode.code == verify_in.code,
+        VerificationCode.used == False,
+    ).first()
+
+    if not code_entry:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+
+    if code_entry.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Code expired")
+
+    code_entry.used = True
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+
+    log_action(
+        db=db, request=request, action="successful_login", entity_type="user",
+        entity_id=str(user.id), user_id=user.id,
+    )
+
+    db.commit()
+
+    return {"access_token": access_token, "token_type": "bearer"}

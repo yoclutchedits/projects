@@ -7,6 +7,7 @@ from app.models.transactions import Transaction
 from app.models.audit_logs import AuditLog
 from app.models.token_blocklist import TokenBlocklist
 from app.routers import transactions
+from app.models.verification_code import VerificationCode
 from app.routers import accounts
 Base.metadata.create_all(bind=engine)
 app = FastAPI()

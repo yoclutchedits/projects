@@ -3,7 +3,9 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
-
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str
 class UserCreate(BaseModel):
     email: str
     password: str
