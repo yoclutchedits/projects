@@ -9,10 +9,14 @@ from app.models.token_blocklist import TokenBlocklist
 from app.routers import transactions
 from app.models.verification_code import VerificationCode
 from app.routers import accounts
+from app.routers import analytics
+from app.models.scheduled_payment import ScheduledPayment
+
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.include_router(accounts.router)
 app.include_router(transactions.router)
+app.include_router(analytics.router)
 app.include_router(auth.router)
 @app.get("/")
 def root():

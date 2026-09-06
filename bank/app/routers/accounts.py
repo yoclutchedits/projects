@@ -8,6 +8,10 @@ from app.models.account import Account
 from app.schemas.account import AccountCreate, AccountOut
 from app.utils.account_utils import generate_account_number
 from app.routers.auth import get_current_user
+from app.utils.scheduled_jobs import apply_monthly_interest
+from app.utils.scheduled_jobs import process_due_payments
+
+
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -70,3 +74,13 @@ def list_my_accounts(
 ):
     accounts = db.query(Account).filter(Account.user_id == current_user.id).all()
     return accounts
+
+@router.post("/run-interest-job")
+def run_interest_job(db: Session = Depends(get_db)):
+    results = apply_monthly_interest(db)
+    return {"detail": "Interest job completed", "results": results}
+
+@router.post("/run-scheduled-payments-job")
+def run_scheduled_payments_job(db: Session = Depends(get_db)):
+    results = process_due_payments(db)
+    return {"detail": "Scheduled payments job completed", "results": results}
