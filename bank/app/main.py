@@ -7,7 +7,9 @@ from app.models.transactions import Transaction
 from app.models.audit_logs import AuditLog
 from app.models.token_blocklist import TokenBlocklist
 Base.metadata.create_all(bind=engine)
+from app.routers import accounts
 app = FastAPI()
+app.include_router(accounts.router)
 app.include_router(auth.router)
 @app.get("/")
 def root():
