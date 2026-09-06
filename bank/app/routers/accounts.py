@@ -1,7 +1,7 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-
+from app.utils.audit import log_action
 from app.database import get_db
 from app.models.user import User
 from app.models.account import Account
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 @router.post("/", response_model=AccountOut)
 def create_account(
     account_in: AccountCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -38,6 +39,15 @@ def create_account(
     )
 
     db.add(new_account)
+    log_action(
+        db=db,
+        request=request,
+        action="create_account",
+        entity_type="account",
+        entity_id=account_number,   # we don't have new_account.id yet (not committed), so use the account_number instead
+        user_id=current_user.id,
+    )
+
     db.commit()
     db.refresh(new_account)
 

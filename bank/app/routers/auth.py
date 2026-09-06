@@ -11,6 +11,8 @@ from fastapi.security import OAuth2PasswordBearer
 from app.security import decode_access_token
 from app.models.token_blocklist import TokenBlocklist
 from datetime import datetime, timezone
+from fastapi import Request
+from app.utils.audit import log_action
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -38,16 +40,39 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(user_in: UserLogin, db: Session = Depends(get_db)):
+def login(user_in: UserLogin, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_in.email).first()
+
     if not user or not verify_password(user_in.password, user.hashed_password):
+        log_action(
+            db=db,
+            request=request,
+            action="failed_login",
+            entity_type="user",
+            entity_id=user_in.email,
+            user_id=user.id if user else None,   
+        )
+        db.commit()  
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
-    access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
 
+    # Log the SUCCESSFUL attempt.
+    log_action(
+        db=db,
+        request=request,
+        action="successful_login",
+        entity_type="user",
+        entity_id=str(user.id),
+        user_id=user.id,
+    )
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+    db.commit()   
+
+    return {"access_token": access_token, "token_type": "bearer"}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
