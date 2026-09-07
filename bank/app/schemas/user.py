@@ -23,3 +23,12 @@ class UserOut(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+class Toggle2FARequest(BaseModel):
+    password: str
+    enable: bool
+
+class UpdateSettingsRequest(BaseModel):
+    full_name: str | None = None
+    notify_large_transfer: bool | None = None
+    notify_failed_login: bool | None = None

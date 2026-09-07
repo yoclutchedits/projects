@@ -3,8 +3,8 @@ from sqlalchemy.sql import func
 from app.database import Base
 from sqlalchemy.orm import relationship
 
-class User(Base): 
-    __tablename__ = "users" 
+class User(Base):
+    __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
@@ -12,3 +12,7 @@ class User(Base):
     is_active = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     accounts = relationship("Account", back_populates="owner")
+
+    two_fa_enabled = Column(Boolean, default=True, nullable=False)
+    notify_large_transfer = Column(Boolean, default=True, nullable=False)
+    notify_failed_login = Column(Boolean, default=True, nullable=False)

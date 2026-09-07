@@ -10,6 +10,7 @@ from app.security import hash_password
 from app.limiter import limiter
 from fastapi.security import OAuth2PasswordBearer
 from app.security import decode_access_token
+from app.schemas.user import UpdateSettingsRequest
 from app.models.token_blocklist import TokenBlocklist
 from datetime import datetime, timezone
 from fastapi import Request
@@ -20,6 +21,7 @@ from app.utils.account_utils import generate_verification_code
 from app.utils.email import send_verification_email
 from app.schemas.user import UserCreate, UserOut, UserLogin 
 from app.schemas.user import VerifyEmailRequest
+from app.schemas.user import Toggle2FARequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -74,6 +76,15 @@ def login(user_in: UserLogin, request: Request, db: Session = Depends(get_db)):
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email before logging in")
+    if not user.two_fa_enabled:
+        # 2FA disabled -- issue the token immediately, same as before 2FA existed.
+        access_token = create_access_token(data={"sub": str(user.id)})
+        log_action(
+            db=db, request=request, action="successful_login", entity_type="user",
+            entity_id=str(user.id), user_id=user.id,
+        )
+        db.commit()
+        return {"access_token": access_token, "token_type": "bearer"}
     code = generate_verification_code()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)  # hint: 2FA codes should be SHORT-lived -- much shorter than the 10-min signup code, since this happens every login
 
@@ -195,3 +206,37 @@ def verify_2fa(verify_in: VerifyEmailRequest, request: Request, db: Session = De
     db.commit()
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/toggle-2fa")
+def toggle_2fa(
+    toggle_in: Toggle2FARequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(toggle_in.password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
+
+    current_user.two_fa_enabled = toggle_in.enable
+    db.commit()
+
+    return {"detail": f"2FA has been {'enabled' if current_user.two_fa_enabled else 'disabled'}"}
+
+@router.patch("/settings", response_model=UserOut)
+def update_settings(
+    settings_in: UpdateSettingsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if settings_in.full_name is not None:
+        current_user.full_name = settings_in.full_name
+
+    if settings_in.notify_large_transfer is not None:
+        current_user.notify_large_transfer = settings_in.notify_large_transfer
+
+    if settings_in.notify_failed_login is not None:
+        current_user.notify_failed_login = settings_in.notify_failed_login
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user

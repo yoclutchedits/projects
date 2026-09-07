@@ -15,7 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from fastapi.staticfiles import StaticFiles
+import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.add_middleware(
@@ -31,6 +34,7 @@ app.include_router(accounts.router)
 app.include_router(transactions.router)
 app.include_router(analytics.router)
 app.include_router(auth.router)
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 @app.get("/")
 def root():
     return {"message": "Bank API is running"}
